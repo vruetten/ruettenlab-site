@@ -11,4 +11,4 @@ PhD students can apply through Princeton’s PhD in [Bioengineering](https://bio
 
 ## Postdocs and other positions
 
-Please get in touch :)
+<p class="invite">Please get in touch :)</p>

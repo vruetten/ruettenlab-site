@@ -92,7 +92,7 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 			<slot />
 			{
 				emailUnderBody && (
-					<p>
+					<p class="contact">
 						<a href={`mailto:${email}`}>{email}</a>
 					</p>
 				)

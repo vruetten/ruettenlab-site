@@ -26,6 +26,7 @@ html[data-theme='dark'] {
 	--bg: #0b0c0c;
 	--volume-fg: #0b0c0c;
 	--volume-bg: #f7f7f6;
+	--link: #f58025;
 	color-scheme: dark;
 }
 
@@ -258,6 +259,25 @@ body {
 
 main p:not(.claim):not(.volume):not(.role):not(.summary) {
 	max-width: var(--measure);
+}
+
+main .invite,
+main .contact {
+	display: inline;
+	margin: 0;
+}
+
+main .contact {
+	margin-left: 0.4em;
+}
+
+main .contact a {
+	text-decoration: none;
+}
+
+html[data-theme='dark'] main a,
+html[data-theme='dark'] .contact-bar a {
+	color: var(--link);
 }
 
 .stage {
