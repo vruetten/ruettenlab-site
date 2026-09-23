@@ -6,7 +6,7 @@ export function authorTokens(authors: string) {
 		.split(',')
 		.map((part) => part.trim())
 		.filter((text) => text.length > 0)
-		.map((text) => ({ text, mark: /ru+tten/i.test(text) }));
+		.map((text) => ({ text, mark: /ru+e*tten/i.test(text) }));
 }
 
 export function hasBody(body: string | undefined) {
