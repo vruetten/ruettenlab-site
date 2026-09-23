@@ -68,10 +68,12 @@ header.wrap {
 
 .mast {
 	display: flex;
+	flex: 0 1 auto;
 	flex-wrap: nowrap;
 	align-items: baseline;
 	gap: 0.35rem 1.75rem;
 	min-width: 0;
+	max-width: 100%;
 }
 
 .mast nav {
@@ -107,16 +109,11 @@ nav a:hover {
 	text-decoration: underline;
 }
 
-.brand {
-	display: flex;
-	align-items: center;
-	gap: 0.55rem 0.85rem;
-	margin-left: auto;
-}
-
 .controls {
+	flex-basis: 100%;
 	display: flex;
 	flex-wrap: nowrap;
+	justify-content: flex-end;
 	gap: 0.4rem 0.5rem;
 	align-items: center;
 }
@@ -191,22 +188,68 @@ main.wrap {
 }
 
 .marks {
+	--mark-gap: 0.4rem;
+	container-type: inline-size;
 	display: flex;
+	flex: 1 1 0%;
 	align-items: center;
 	justify-content: flex-end;
 	flex-wrap: nowrap;
-	gap: 0.4rem 0.55rem;
+	gap: var(--mark-gap);
+	min-width: min(100%, 20rem);
+	max-width: 100%;
+}
+
+.marks a {
+	display: flex;
+	min-width: 0;
+	line-height: 0;
+	text-decoration: none;
 }
 
 .marks img {
-	height: 3.45rem;
+	/* 11.293 is the combined aspect ratio of the three lockups. */
+	height: min(3.15rem, calc((100cqi - 2 * var(--mark-gap) - 2px) / 11.293));
 	width: auto;
+	max-width: 100%;
 	background: transparent;
-	padding: 0.18rem 0.28rem;
+	padding: 0;
 }
 
-html[data-theme='dark'] .marks img {
-	filter: invert(1) hue-rotate(180deg);
+.princeton-logo-white {
+	display: none;
+}
+
+html[data-theme='dark'] .princeton-logo-color {
+	display: none;
+}
+
+html[data-theme='dark'] .princeton-logo-white {
+	display: block;
+}
+
+.odbi-dark {
+	display: none;
+}
+
+html[data-theme='dark'] .odbi-color {
+	display: none;
+}
+
+html[data-theme='dark'] .odbi-dark {
+	display: block;
+}
+
+.pni-dark {
+	display: none;
+}
+
+html[data-theme='dark'] .pni-color {
+	display: none;
+}
+
+html[data-theme='dark'] .pni-dark {
+	display: block;
 }
 
 body {
@@ -459,17 +502,6 @@ main p:not(.claim):not(.volume):not(.role):not(.summary) {
 h1,
 .claim {
 	text-wrap: balance;
-}
-
-@media (max-width: 1180px) {
-	.brand {
-		flex-basis: 100%;
-		margin-left: 0;
-	}
-
-	.marks {
-		justify-content: flex-start;
-	}
 }
 
 @media (max-width: 800px) {

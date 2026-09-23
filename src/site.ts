@@ -1,6 +1,9 @@
 export const labName = 'WHOLISTIC lab';
 export const email = 'vms.ruetten@gmail.com';
 export const janeliaUrl = 'https://wholistic.janelia.org/';
+export const princetonUrl = 'https://www.princeton.edu/';
+export const pniUrl = 'https://pni.princeton.edu/';
+export const odbiUrl = 'https://bioengineering.princeton.edu/';
 
 export const profiles = [
 	{
