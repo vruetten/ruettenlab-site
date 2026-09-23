@@ -24,8 +24,8 @@ function widthsFor(image: ImageMetadata) {
 const news = (await getCollection('news')).sort((a, b) => {
 	const byLead = Number(b.data.lead) - Number(a.data.lead);
 	if (byLead !== 0) return byLead;
-	const bySize = Number(a.data.size === 'small') - Number(b.data.size === 'small');
-	if (bySize !== 0) return bySize;
+	const byPin = Number(b.data.pin) - Number(a.data.pin);
+	if (byPin !== 0) return byPin;
 	const byDate = b.data.date.valueOf() - a.data.date.valueOf();
 	if (byDate !== 0) return byDate;
 	const label = (item: (typeof news)[number]) =>

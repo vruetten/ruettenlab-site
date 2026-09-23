@@ -69,6 +69,7 @@ const news = defineCollection({
 			crop: z.enum(['center', 'left', 'right']).default('center'),
 			size: z.enum(['large', 'small']).default('large'),
 			lead: z.boolean().default(false),
+			pin: z.boolean().default(false),
 			text: z.string().optional(),
 		})
 		.check((ctx) => {
