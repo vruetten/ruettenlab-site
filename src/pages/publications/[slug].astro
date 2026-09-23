@@ -35,7 +35,7 @@ const figure = figureEntry?.[1].default;
 		<h1>{paper.data.title}</h1>
 		<p class="role">{paper.data.year}</p>
 		<p>
-			<a href={paper.data.url}>{paper.data.venue}</a>
+			<a class="soft" href={paper.data.url}>{paper.data.venue}</a>
 		</p>
 		<p>
 			<Authors authors={paper.data.authors} />
@@ -46,7 +46,7 @@ const figure = figureEntry?.[1].default;
 				{paper.data.featured.map((item, index) => (
 					<>
 						{index > 0 ? ', ' : null}
-						<a href={item.url} target="_blank" rel="noopener noreferrer">
+						<a class="soft" href={item.url} target="_blank" rel="noopener noreferrer">
 							{item.label}
 						</a>
 					</>

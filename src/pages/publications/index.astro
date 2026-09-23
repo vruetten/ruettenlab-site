@@ -60,7 +60,7 @@ for (const year of years) {
 		{
 			profiles.map((profile) => (
 				<li>
-					<a href={profile.url}>{profile.label}</a>
+					<a class="soft" href={profile.url}>{profile.label}</a>
 				</li>
 			))
 		}
@@ -100,7 +100,7 @@ for (const year of years) {
 															{paper.data.featured.map((item, index) => (
 																<>
 																	{index > 0 ? ', ' : null}
-																	<a href={item.url} target="_blank" rel="noopener noreferrer">
+																	<a class="soft" href={item.url} target="_blank" rel="noopener noreferrer">
 																		{item.label}
 																	</a>
 																</>

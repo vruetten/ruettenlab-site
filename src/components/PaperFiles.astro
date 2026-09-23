@@ -21,7 +21,7 @@ const files = [
 		<ul class="paper-files">
 			{files.map((item) => (
 				<li>
-					<a href={siteHref(`publications/${item.file}`)} download={item.file}>
+					<a class="soft" href={siteHref(`publications/${item.file}`)} download={item.file}>
 						{item.label}
 					</a>
 				</li>

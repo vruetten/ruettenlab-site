@@ -81,7 +81,7 @@ const people = (await getCollection('people')).sort((a, b) => {
 								<ul class="person-links">
 									{links.map((link) => (
 										<li>
-											<a href={link.url}>{link.label}</a>
+											<a class="soft" href={link.url}>{link.label}</a>
 										</li>
 									))}
 								</ul>

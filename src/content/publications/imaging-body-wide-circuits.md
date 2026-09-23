@@ -4,7 +4,7 @@ year: 2026
 authors: "Virginie M. S. Ruetten, Wei Zheng, Igor Siwanowicz, Brett D. Mensh, Mark Eddison, Amy Hu, Yunfeng Chi, Andrew L. Lemire, Caiying Guo, Mykola Kadobianskyi, Marc Renz, Sara Lelek-Greskovic, Yisheng He, Kari Close, Gudrun Ihrke, Aparna Dev, Alyson Petruncio, Yinan Wan, Rongwei Zhang, Mark C. Fishman, Florian Engert, Benjamin Judkewitz, Mikail Rubinov, Philipp J. Keller, Chie Satou, Guoqiang Yu, Paul W. Tillberg, Maneesh Sahani, Misha B. Ahrens"
 venue: "Nature"
 url: "https://doi.org/10.1038/s41586-026-10979-6"
-figure: "imaging-body-wide-circuits.jpg"
+figure: "imaging-body-wide-circuits.png"
 pdf: "imaging-body-wide-circuits.pdf"
 featured:
   - label: "EurekAlert"
