@@ -1,0 +1,37 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { labName, siteHref } from '../site';
+
+const news = (await getCollection('news')).sort((a, b) => {
+	const byDate = b.data.date.valueOf() - a.data.date.valueOf();
+	if (byDate !== 0) return byDate;
+	return a.data.text.localeCompare(b.data.text);
+});
+const threads = await getCollection('research');
+const claim = threads[0]?.data.title ?? '';
+---
+
+<Base>
+	<p class="volume">No volume yet</p>
+	<div class="stage">
+		<div>
+			<h1>{labName}</h1>
+			<p class="claim">{claim}</p>
+			<p class="sentence">This sentence is a placeholder.</p>
+			<p><a href={siteHref('join/')}>Join</a></p>
+		</div>
+		<ul class="news-list">
+			{
+				news.map((item) => (
+					<li>
+						<time datetime={item.data.date.toISOString().slice(0, 10)}>
+							{item.data.date.toISOString().slice(0, 10)}
+						</time>
+						<span>{item.data.text}</span>
+					</li>
+				))
+			}
+		</ul>
+	</div>
+</Base>

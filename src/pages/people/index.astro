@@ -1,0 +1,25 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const people = (await getCollection('people')).sort((a, b) => {
+	const byName = a.data.name.localeCompare(b.data.name);
+	if (byName !== 0) return byName;
+	return a.id.localeCompare(b.id);
+});
+---
+
+<Base>
+	{
+		people.map(async (person) => {
+			const { Content } = await render(person);
+			return (
+				<article class="person">
+					<h1>{person.data.name}</h1>
+					<p class="role">{person.data.role}</p>
+					<Content />
+				</article>
+			);
+		})
+	}
+</Base>

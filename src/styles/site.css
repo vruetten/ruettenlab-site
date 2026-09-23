@@ -1,0 +1,262 @@
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+:root {
+	color: #1c1c1c;
+	background: #f7f7f6;
+	font-family: system-ui, sans-serif;
+	font-size: clamp(1.2rem, 1.15vw, 1.5rem);
+	line-height: 1.6;
+	--fg: #1c1c1c;
+	--bg: #f7f7f6;
+	--volume-fg: #f7f7f6;
+	--volume-bg: #0b0c0c;
+	--inset: clamp(1.25rem, 4.25vw, 6rem);
+	--measure: 62ch;
+	color-scheme: light;
+}
+
+html[data-theme='dark'] {
+	color: #f7f7f6;
+	background: #0b0c0c;
+	--fg: #f7f7f6;
+	--bg: #0b0c0c;
+	--volume-fg: #0b0c0c;
+	--volume-bg: #f7f7f6;
+	color-scheme: dark;
+}
+
+html,
+body {
+	margin: 0;
+	overflow-x: clip;
+	color: var(--fg);
+	background: var(--bg);
+}
+
+a {
+	color: inherit;
+}
+
+a:focus-visible,
+button:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 3px;
+}
+
+.wrap {
+	width: 100%;
+	padding-inline: var(--inset);
+}
+
+header.wrap {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: clamp(1.5rem, 3vw, 3rem);
+	row-gap: 0.75rem;
+	padding-block: 1rem;
+	background: var(--bg);
+}
+
+.wordmark {
+	font-size: clamp(1.15rem, 1.5vw, 1.45rem);
+	text-decoration: none;
+	padding-block: 0.35rem;
+}
+
+nav ul {
+	display: flex;
+	justify-content: flex-start;
+	flex-wrap: wrap;
+	gap: 0.35rem 1.75rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+nav a {
+	display: inline-block;
+	padding-block: 0.45rem;
+	text-decoration: none;
+}
+
+nav a:hover {
+	text-decoration: underline;
+}
+
+.controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 0.75rem;
+	align-items: center;
+}
+
+.switch {
+	display: flex;
+}
+
+.switch button {
+	font: inherit;
+	font-size: 1rem;
+	min-height: 2.75rem;
+	padding: 0.35rem 0.85rem;
+	background: transparent;
+	color: inherit;
+	border: 1px solid currentColor;
+	cursor: pointer;
+}
+
+.switch button + button {
+	margin-left: -1px;
+}
+
+.switch button[aria-pressed='true'] {
+	background: var(--fg);
+	color: var(--bg);
+}
+
+main.wrap {
+	padding-block: clamp(1.25rem, 4vh, 2.75rem) 0;
+}
+
+.contact-bar {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 2;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-start;
+	align-items: center;
+	gap: 0.35rem 1.75rem;
+	padding: 0.85rem var(--inset);
+	padding-bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px));
+	background: var(--bg);
+}
+
+body {
+	padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+main p:not(.claim):not(.volume):not(.role):not(.summary) {
+	max-width: var(--measure);
+}
+
+.stage {
+	display: grid;
+	gap: clamp(2rem, 5vh, 3.5rem);
+	padding-block: clamp(1.5rem, 6vh, 3.5rem) clamp(2rem, 6vh, 4rem);
+}
+
+.news-list,
+.entries,
+.papers,
+.links {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.news-list,
+.entries {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: clamp(1.25rem, 2vw, 2rem);
+}
+
+.news-list li,
+.entries li {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.papers li {
+	grid-template-columns: 6rem minmax(0, 1fr);
+	column-gap: 1.5rem;
+	align-items: baseline;
+}
+
+.papers {
+	display: grid;
+	gap: 1.35rem;
+}
+
+.papers li {
+	display: grid;
+}
+
+.links {
+	display: grid;
+	gap: 0.85rem;
+}
+
+.reveal button {
+	font: inherit;
+	font-size: 1.05rem;
+	min-height: 2.75rem;
+	padding: 0.55rem 0;
+	background: none;
+	border: 0;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+h1,
+.claim {
+	text-wrap: balance;
+}
+
+@media (max-width: 800px) {
+	header.wrap {
+		grid-template-columns: 1fr;
+	}
+
+	nav ul {
+		flex-wrap: wrap;
+		justify-content: flex-start;
+	}
+
+	.news-list,
+	.entries,
+	.papers li {
+		grid-template-columns: 1fr;
+	}
+}
+
+.person {
+	width: 100%;
+}
+
+.acquisition {
+	display: none;
+}
+
+.reveal:has(:focus-visible) .acquisition,
+.reveal:has([aria-expanded='true']) .acquisition {
+	display: block;
+}
+
+@media (hover: hover) {
+	.reveal:hover .acquisition {
+		display: block;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.acquisition {
+		transform: none;
+		transition: none;
+	}
+}
+
+

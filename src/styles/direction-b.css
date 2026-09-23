@@ -1,0 +1,28 @@
+/* Direction B, Atlas. System sans. No typeface file is installed. */
+
+html[data-direction='b'] h1 {
+	font-family: system-ui, sans-serif;
+	font-size: clamp(3rem, 5.5vw, 6rem);
+	line-height: 0.98;
+	font-weight: 500;
+	max-width: min(14ch, 100%);
+	margin: 0 0 0.3em;
+}
+
+html[data-direction='b'] .volume {
+	display: none;
+}
+
+html[data-direction='b'] .claim {
+	font-size: clamp(3.4rem, 7vw, 7.5rem);
+	line-height: 0.94;
+	max-width: min(12ch, 100%);
+	margin: 0 0 0.3em;
+}
+
+html[data-direction='b'] .role,
+html[data-direction='b'] .summary {
+	margin: 0 0 0.75em;
+	font-size: 1.15em;
+	max-width: var(--measure);
+}

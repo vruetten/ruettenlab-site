@@ -1,0 +1,27 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const papers = (await getCollection('publications')).sort((a, b) => {
+	const byYear = b.data.year - a.data.year;
+	if (byYear !== 0) return byYear;
+	return a.data.title.localeCompare(b.data.title);
+});
+---
+
+<Base>
+	<ol class="papers">
+		{
+			papers.map((paper) => (
+				<li>
+					<span>{paper.data.year}</span>
+					<span>
+						{paper.data.authors}. {paper.data.title}
+						{paper.data.venue ? `. ${paper.data.venue}` : ''}
+						{paper.data.url ? <a href={paper.data.url}>{paper.data.url}</a> : null}
+					</span>
+				</li>
+			))
+		}
+	</ol>
+</Base>

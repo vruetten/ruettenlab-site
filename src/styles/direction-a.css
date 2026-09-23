@@ -1,0 +1,28 @@
+/* Direction A, Acquisition. System sans. No typeface file is installed. */
+
+html[data-direction='a'] h1 {
+	font-family: system-ui, sans-serif;
+	font-size: clamp(3rem, 6vw, 6.5rem);
+	line-height: 0.98;
+	font-weight: 550;
+	max-width: 14ch;
+	margin: 0 0 0.35em;
+}
+
+html[data-direction='a'] .volume {
+	width: 100vw;
+	min-height: 100vh;
+	min-height: 100svh;
+	margin-left: calc(50% - 50vw);
+	display: grid;
+	place-items: center;
+	padding: var(--inset);
+	background: var(--volume-bg);
+	color: var(--volume-fg);
+	font-size: clamp(2.25rem, 5vw, 4.5rem);
+	max-width: none;
+}
+
+html[data-direction='a'] .claim {
+	display: none;
+}

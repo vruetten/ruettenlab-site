@@ -1,0 +1,18 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+
+const resources = await getCollection('resources');
+---
+
+<Base>
+	<ul class="links">
+		{
+			resources.map((item) => (
+				<li>
+					{item.data.kind}: <a href={item.data.url}>{item.data.title}</a>
+				</li>
+			))
+		}
+	</ul>
+</Base>
