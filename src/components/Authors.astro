@@ -1,0 +1,18 @@
+---
+import { authorTokens } from '../papers';
+
+interface Props {
+	authors: string;
+}
+
+const tokens = authorTokens(Astro.props.authors);
+---
+
+{
+	tokens.map((token, index) => (
+		<>
+			{index > 0 ? ', ' : null}
+			{token.mark ? <strong>{token.text}</strong> : token.text}
+		</>
+	))
+}

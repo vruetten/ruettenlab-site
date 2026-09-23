@@ -1,27 +1,80 @@
 ---
+import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
+import Authors from '../../components/Authors.astro';
+import PaperFiles from '../../components/PaperFiles.astro';
 import Base from '../../layouts/Base.astro';
+import { hasBody } from '../../papers';
+import { profiles, siteHref } from '../../site';
+
+const figures = import.meta.glob<{ default: ImageMetadata }>(
+	'../../assets/publications/*.{png,jpg,jpeg,webp,gif}',
+	{ eager: true },
+);
+
+function figureFor(name: string | undefined) {
+	if (!name) return undefined;
+	const entry = Object.entries(figures).find(([key]) => key.endsWith(`/${name}`));
+	if (!entry) throw new Error(`Missing figure ${name}`);
+	return entry[1].default;
+}
 
 const papers = (await getCollection('publications')).sort((a, b) => {
 	const byYear = b.data.year - a.data.year;
 	if (byYear !== 0) return byYear;
 	return a.data.title.localeCompare(b.data.title);
 });
+
+const years: { year: number; papers: typeof papers }[] = [];
+for (const paper of papers) {
+	const last = years[years.length - 1];
+	if (!last || last.year !== paper.data.year) years.push({ year: paper.data.year, papers: [paper] });
+	else last.papers.push(paper);
+}
 ---
 
 <Base>
-	<ol class="papers">
+	<ul class="profiles">
 		{
-			papers.map((paper) => (
+			profiles.map((profile) => (
 				<li>
-					<span>{paper.data.year}</span>
-					<span>
-						{paper.data.authors}. {paper.data.title}
-						{paper.data.venue ? `. ${paper.data.venue}` : ''}
-						{paper.data.url ? <a href={paper.data.url}>{paper.data.url}</a> : null}
-					</span>
+					<a href={profile.url}>{profile.label}</a>
 				</li>
 			))
 		}
-	</ol>
+	</ul>
+	<div class="years">
+		{
+			years.map((group) => (
+				<section>
+					<h2>{group.year}</h2>
+					<ol>
+						{group.papers.map((paper) => {
+							const figure = figureFor(paper.data.figure);
+							const page = hasBody(paper.body) ? siteHref(`publications/${paper.id}/`) : undefined;
+							return (
+								<li class:list={['paper', { 'has-figure': Boolean(figure) }]}>
+									{figure && (
+										<Image src={figure} alt={paper.data.title} width={160} loading="lazy" />
+									)}
+									<div>
+										<div class="paper-title">
+											{page ? <a href={page}>{paper.data.title}</a> : paper.data.title}
+										</div>
+										<div class="paper-venue">
+											<a href={paper.data.url}>{paper.data.venue}</a>
+										</div>
+										<div class="paper-authors">
+											<Authors authors={paper.data.authors} />
+										</div>
+										<PaperFiles pdf={paper.data.pdf} supplements={paper.data.supplements} />
+									</div>
+								</li>
+							);
+						})}
+					</ol>
+				</section>
+			))
+		}
+	</div>
 </Base>

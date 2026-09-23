@@ -38,8 +38,13 @@ const publications = defineCollection({
 		title: z.string(),
 		year: z.number().int(),
 		authors: z.string(),
-		venue: z.string().optional(),
-		url: z.string().url().optional(),
+		venue: z.string(),
+		url: z.string().url(),
+		figure: z.string().optional(),
+		pdf: z.string().optional(),
+		supplements: z
+			.array(z.object({ label: z.string(), file: z.string() }))
+			.optional(),
 	}),
 });
 

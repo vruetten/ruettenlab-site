@@ -1,0 +1,31 @@
+---
+import { publicationFile } from '../papers';
+import { siteHref } from '../site';
+
+interface Props {
+	pdf?: string;
+	supplements?: { label: string; file: string }[];
+}
+
+const files = [
+	...(Astro.props.pdf ? [{ label: 'PDF', file: publicationFile(Astro.props.pdf) }] : []),
+	...(Astro.props.supplements ?? []).map((item) => ({
+		label: item.label,
+		file: publicationFile(item.file),
+	})),
+];
+---
+
+{
+	files.length > 0 && (
+		<ul class="paper-files">
+			{files.map((item) => (
+				<li>
+					<a href={siteHref(`publications/${item.file}`)} download={item.file}>
+						{item.label}
+					</a>
+				</li>
+			))}
+		</ul>
+	)
+}

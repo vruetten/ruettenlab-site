@@ -1,0 +1,47 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection, render } from 'astro:content';
+import Authors from '../../components/Authors.astro';
+import PaperFiles from '../../components/PaperFiles.astro';
+import Base from '../../layouts/Base.astro';
+import { hasBody } from '../../papers';
+
+const figures = import.meta.glob<{ default: ImageMetadata }>(
+	'../../assets/publications/*.{png,jpg,jpeg,webp,gif}',
+	{ eager: true },
+);
+
+export async function getStaticPaths() {
+	const papers = await getCollection('publications');
+	return papers
+		.filter((paper) => hasBody(paper.body))
+		.map((paper) => ({
+			params: { slug: paper.id },
+			props: { paper },
+		}));
+}
+
+const { paper } = Astro.props;
+const { Content } = await render(paper);
+const figureEntry = paper.data.figure
+	? Object.entries(figures).find(([key]) => key.endsWith(`/${paper.data.figure}`))
+	: undefined;
+if (paper.data.figure && !figureEntry) throw new Error(`Missing figure ${paper.data.figure}`);
+const figure = figureEntry?.[1].default;
+---
+
+<Base>
+	<article class="paper-page">
+		<h1>{paper.data.title}</h1>
+		<p class="role">{paper.data.year}</p>
+		<p>
+			<a href={paper.data.url}>{paper.data.venue}</a>
+		</p>
+		<p>
+			<Authors authors={paper.data.authors} />
+		</p>
+		{figure && <Image src={figure} alt={paper.data.title} width={720} loading="lazy" />}
+		<Content />
+		<PaperFiles pdf={paper.data.pdf} supplements={paper.data.supplements} />
+	</article>
+</Base>
