@@ -27,7 +27,6 @@ html[data-theme='dark'] {
 	--volume-fg: #0b0c0c;
 	--volume-bg: #f7f7f6;
 	--link: #f58025;
-	--link-soft: #f6b27a;
 	color-scheme: dark;
 }
 
@@ -281,15 +280,13 @@ html[data-theme='dark'] .contact-bar a {
 	color: var(--link);
 }
 
-html[data-theme='dark'][data-direction='a'] a.soft {
+html[data-theme='dark'] a.soft {
 	color: var(--fg);
 }
 
-html[data-theme='dark'][data-direction='b'] a.soft {
-	color: var(--link-soft);
-}
-
-html[data-theme='dark'] .press-meta {
+html[data-theme='dark'] .press-meta,
+html[data-theme='dark'] .featured a,
+html[data-theme='dark'] .news-list a {
 	color: var(--fg);
 }
 
@@ -454,30 +451,6 @@ html[data-theme='dark'] .press-title {
 	margin-bottom: 0;
 }
 
-.paper.has-figure {
-	grid-template-columns: 7rem minmax(0, 1fr);
-	align-items: start;
-}
-
-.paper img {
-	width: 7rem;
-	height: 4.5rem;
-	object-fit: contain;
-	object-position: center;
-	display: block;
-}
-
-html[data-theme='dark'] .paper img,
-html[data-theme='dark'] .paper-page img {
-	filter: invert(1);
-}
-
-.paper-page img {
-	width: min(40rem, 100%);
-	height: auto;
-	margin: 1.25rem 0;
-}
-
 .paper-title,
 .paper-venue,
 .paper-authors {
@@ -560,8 +533,7 @@ main h2 {
 		justify-content: flex-start;
 	}
 
-	.press-grid,
-	.paper.has-figure {
+	.press-grid {
 		grid-template-columns: 1fr;
 	}
 

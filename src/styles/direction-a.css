@@ -9,6 +9,12 @@ html[data-direction='a'] h1 {
 	margin: 0 0 0.35em;
 }
 
+html[data-direction='a'] h1.lead {
+	font-size: clamp(2.35rem, 4.6vw, 3.75rem);
+	line-height: 1.05;
+	max-width: min(16em, 100%);
+}
+
 html[data-direction='a'] .volume {
 	width: 100vw;
 	min-height: 100vh;

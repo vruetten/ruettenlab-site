@@ -15,7 +15,6 @@ export const profiles = [
 export const nav = [
 	{ path: 'research/', label: 'Research' },
 	{ path: 'people/', label: 'People' },
-	{ path: 'resources/', label: 'Resources' },
 	{ path: 'publications/', label: 'Publications' },
 	{ path: 'news/', label: 'News' },
 	{ path: 'join/', label: 'Join' },

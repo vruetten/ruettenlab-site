@@ -1,20 +1,18 @@
 ---
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
-import { siteHref } from '../../site';
 
 const threads = await getCollection('research');
+const thread = threads[0];
 ---
 
 <Base>
-	<ul class="links">
-		{
-			threads.map((thread) => (
-				<li>
-					<a href={siteHref(`research/${thread.id}/`)}>{thread.data.title}</a>
-					<p>{thread.data.summary}</p>
-				</li>
-			))
-		}
-	</ul>
+	{
+		thread && (
+			<>
+				<h1 class="lead">{thread.data.title}</h1>
+				<p>{thread.data.summary}</p>
+			</>
+		)
+	}
 </Base>

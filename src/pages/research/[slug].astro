@@ -1,5 +1,5 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 
 export async function getStaticPaths() {
@@ -11,29 +11,11 @@ export async function getStaticPaths() {
 }
 
 const { thread } = Astro.props;
-const { Content } = await render(thread);
 ---
 
 <Base>
 	<article class="thread">
-	<h1>{thread.data.title}</h1>
-	<p class="summary">{thread.data.summary}</p>
-	<div class="reveal">
-		<button type="button" data-acquisition aria-expanded="false" aria-controls="acquisition">
-			{thread.data.title}
-		</button>
-		<p id="acquisition" class="acquisition">{thread.data.acquisition}</p>
-	</div>
-	<Content />
+		<h1 class="lead">{thread.data.title}</h1>
+		<p>{thread.data.summary}</p>
 	</article>
 </Base>
-<script>
-	const button = document.querySelector('[data-acquisition]');
-	if (button instanceof HTMLButtonElement) {
-		button.addEventListener('click', (event) => {
-			if (event.detail === 0) return;
-			const open = button.getAttribute('aria-expanded') === 'true';
-			button.setAttribute('aria-expanded', String(!open));
-		});
-	}
-</script>

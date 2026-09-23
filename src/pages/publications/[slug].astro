@@ -1,15 +1,9 @@
 ---
-import { Image } from 'astro:assets';
 import { getCollection, render } from 'astro:content';
 import Authors from '../../components/Authors.astro';
 import PaperFiles from '../../components/PaperFiles.astro';
 import Base from '../../layouts/Base.astro';
 import { hasBody } from '../../papers';
-
-const figures = import.meta.glob<{ default: ImageMetadata }>(
-	'../../assets/publications/*.{png,jpg,jpeg,webp,gif}',
-	{ eager: true },
-);
 
 export async function getStaticPaths() {
 	const papers = await getCollection('publications');
@@ -23,11 +17,6 @@ export async function getStaticPaths() {
 
 const { paper } = Astro.props;
 const { Content } = await render(paper);
-const figureEntry = paper.data.figure
-	? Object.entries(figures).find(([key]) => key.endsWith(`/${paper.data.figure}`))
-	: undefined;
-if (paper.data.figure && !figureEntry) throw new Error(`Missing figure ${paper.data.figure}`);
-const figure = figureEntry?.[1].default;
 ---
 
 <Base>
@@ -46,14 +35,13 @@ const figure = figureEntry?.[1].default;
 				{paper.data.featured.map((item, index) => (
 					<>
 						{index > 0 ? ', ' : null}
-						<a class="soft" href={item.url} target="_blank" rel="noopener noreferrer">
+						<a href={item.url} target="_blank" rel="noopener noreferrer">
 							{item.label}
 						</a>
 					</>
 				))}
 			</div>
 		)}
-		{figure && <Image src={figure} alt={paper.data.title} width={720} loading="lazy" />}
 		<Content />
 		<PaperFiles pdf={paper.data.pdf} supplements={paper.data.supplements} />
 	</article>

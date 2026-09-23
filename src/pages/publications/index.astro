@@ -1,23 +1,10 @@
 ---
-import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
 import Authors from '../../components/Authors.astro';
 import PaperFiles from '../../components/PaperFiles.astro';
 import Base from '../../layouts/Base.astro';
 import { hasBody } from '../../papers';
 import { profiles, siteHref } from '../../site';
-
-const figures = import.meta.glob<{ default: ImageMetadata }>(
-	'../../assets/publications/*.{png,jpg,jpeg,webp,gif}',
-	{ eager: true },
-);
-
-function figureFor(name: string | undefined) {
-	if (!name) return undefined;
-	const entry = Object.entries(figures).find(([key]) => key.endsWith(`/${name}`));
-	if (!entry) throw new Error(`Missing figure ${name}`);
-	return entry[1].default;
-}
 
 const papers = (await getCollection('publications')).sort((a, b) => {
 	const byYear = b.data.year - a.data.year;
@@ -76,15 +63,11 @@ for (const year of years) {
 								{kindGroup.kind !== 'paper' && <h3>{kindLabel[kindGroup.kind]}</h3>}
 								<ol>
 									{kindGroup.papers.map((paper) => {
-										const figure = figureFor(paper.data.figure);
 										const page = hasBody(paper.body)
 											? siteHref(`publications/${paper.id}/`)
 											: paper.data.url;
 										return (
-											<li class:list={['paper', { 'has-figure': Boolean(figure) }]}>
-												{figure && (
-													<Image src={figure} alt={paper.data.title} width={640} loading="lazy" />
-												)}
+											<li class="paper">
 												<div>
 													<div class="paper-head">
 														<a class="paper-title" href={page}>{paper.data.title}</a>
@@ -100,7 +83,7 @@ for (const year of years) {
 															{paper.data.featured.map((item, index) => (
 																<>
 																	{index > 0 ? ', ' : null}
-																	<a class="soft" href={item.url} target="_blank" rel="noopener noreferrer">
+																	<a href={item.url} target="_blank" rel="noopener noreferrer">
 																		{item.label}
 																	</a>
 																</>

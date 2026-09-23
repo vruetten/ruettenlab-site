@@ -21,7 +21,6 @@ const news = (await getCollection('news'))
 	.filter((item) => item.data.size !== 'small')
 	.slice(0, 5);
 const threads = await getCollection('research');
-const claim = threads[0]?.data.title ?? '';
 ---
 
 <Base>
@@ -29,8 +28,7 @@ const claim = threads[0]?.data.title ?? '';
 	<div class="stage">
 		<div>
 			<h1>{labName}</h1>
-			<p class="claim">{claim}</p>
-			<p class="sentence">This sentence is a placeholder.</p>
+			<p class="sentence">{threads[0]?.data.summary}</p>
 			<p><a href={siteHref('join/')}>Join</a></p>
 		</div>
 		<div>
@@ -43,7 +41,7 @@ const claim = threads[0]?.data.title ?? '';
 							</time>
 							{
 								item.data.kind === 'press' ? (
-									<a class="soft" href={item.data.url} target="_blank" rel="noopener noreferrer">
+									<a href={item.data.url} target="_blank" rel="noopener noreferrer">
 										{item.data.outlet}
 									</a>
 								) : (
