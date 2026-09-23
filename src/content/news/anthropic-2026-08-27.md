@@ -6,4 +6,5 @@ title: "HHMI Janelia: Using MHS to accelerate microscopy research"
 url: https://www.anthropic.com/news/model-hardware-standard-research-preview#early-examples-from-mhs
 topic: mhs
 image: anthropic.jpg
+rank: 1
 ---

@@ -61,6 +61,7 @@ const news = defineCollection({
 		.object({
 			kind: z.enum(['press', 'lab']),
 			date: z.coerce.date(),
+			datePrecision: z.enum(['day', 'month']).default('day'),
 			outlet: z.string().optional(),
 			title: z.string().optional(),
 			url: z.string().url().optional(),
@@ -70,6 +71,7 @@ const news = defineCollection({
 			size: z.enum(['large', 'small']).default('large'),
 			lead: z.boolean().default(false),
 			pin: z.boolean().default(false),
+			rank: z.number().int().positive().optional(),
 			text: z.string().optional(),
 		})
 		.check((ctx) => {

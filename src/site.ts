@@ -23,8 +23,11 @@ export const nav = [
 
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export function formatDate(date: Date): string {
-	return `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+export function formatDate(date: Date, precision: 'day' | 'month' = 'day'): string {
+	const month = months[date.getUTCMonth()];
+	const year = date.getUTCFullYear();
+	if (precision === 'month') return `${month} ${year}`;
+	return `${date.getUTCDate()} ${month} ${year}`;
 }
 
 export function siteHref(path = ''): string {

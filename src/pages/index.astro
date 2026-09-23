@@ -9,6 +9,9 @@ const news = (await getCollection('news'))
 		if (byLead !== 0) return byLead;
 		const byPin = Number(b.data.pin) - Number(a.data.pin);
 		if (byPin !== 0) return byPin;
+		const rankA = a.data.rank ?? Number.POSITIVE_INFINITY;
+		const rankB = b.data.rank ?? Number.POSITIVE_INFINITY;
+		if (rankA !== rankB) return rankA - rankB;
 		const byDate = b.data.date.valueOf() - a.data.date.valueOf();
 		if (byDate !== 0) return byDate;
 		const label = (item: (typeof news)[number]) =>
@@ -36,7 +39,7 @@ const claim = threads[0]?.data.title ?? '';
 					news.map((item) => (
 						<li>
 							<time datetime={item.data.date.toISOString().slice(0, 10)}>
-								{formatDate(item.data.date)}
+								{formatDate(item.data.date, item.data.datePrecision)}
 							</time>
 							{
 								item.data.kind === 'press' ? (
