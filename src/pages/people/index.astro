@@ -16,6 +16,12 @@ function portraitFor(name: string | undefined) {
 	return entry[1].default;
 }
 
+function portraitWidths(image: ImageMetadata) {
+	const steps = [480, 720, 1080].filter((width) => width < image.width);
+	steps.push(Math.min(image.width, 1080));
+	return [...new Set(steps)];
+}
+
 const people = (await getCollection('people')).sort((a, b) => {
 	const orderA = a.data.order ?? Number.POSITIVE_INFINITY;
 	const orderB = b.data.order ?? Number.POSITIVE_INFINITY;
@@ -27,6 +33,18 @@ const people = (await getCollection('people')).sort((a, b) => {
 ---
 
 <Base>
+	<style slot="head" is:inline>
+		html:not([data-people='ready']) body {
+			opacity: 0;
+		}
+	</style>
+	<noscript slot="head">
+		<style is:inline>
+			body {
+				opacity: 1 !important;
+			}
+		</style>
+	</noscript>
 	<ul class="people">
 		{
 			people.map((person) => {
@@ -38,13 +56,19 @@ const people = (await getCollection('people')).sort((a, b) => {
 				return (
 					<li class:list={['vignette', { 'has-photo': Boolean(photo) }]}>
 						{photo && (
-							<Image
-								class:list={[`crop-${person.data.crop}`]}
-								src={photo}
-								alt=""
-								widths={[320, 640]}
-								sizes="(max-width: 800px) 14rem, 13rem"
-							/>
+							<span class="portrait">
+								<Image
+									class:list={[`crop-${person.data.crop}`]}
+									src={photo}
+									alt=""
+									widths={portraitWidths(photo)}
+									sizes="14rem"
+									quality={90}
+									loading="eager"
+									decoding="async"
+									fetchpriority="high"
+								/>
+							</span>
 						)}
 						<div>
 							<h2>{person.data.name}</h2>
@@ -64,4 +88,37 @@ const people = (await getCollection('people')).sort((a, b) => {
 			})
 		}
 	</ul>
+	<script is:inline>
+		(function () {
+			var root = document.documentElement;
+			var images = document.querySelectorAll('.portrait img');
+			var remaining = images.length;
+			function reveal() {
+				root.setAttribute('data-people', 'ready');
+			}
+			if (!remaining) {
+				reveal();
+				return;
+			}
+			function finish() {
+				remaining -= 1;
+				if (remaining <= 0) reveal();
+			}
+			function settle(img) {
+				if (img.complete && img.naturalWidth > 0) {
+					finish();
+					return;
+				}
+				if (img.complete) {
+					if (typeof img.decode === 'function') img.decode().then(finish, finish);
+					else finish();
+					return;
+				}
+				img.addEventListener('load', finish, { once: true });
+				img.addEventListener('error', finish, { once: true });
+			}
+			for (var i = 0; i < images.length; i++) settle(images[i]);
+			setTimeout(reveal, 12000);
+		})();
+	</script>
 </Base>

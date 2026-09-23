@@ -40,6 +40,7 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 		<meta name="robots" content="noindex" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{labName}</title>
+		<slot name="head" />
 	</head>
 	<body>
 		<header class="wrap">

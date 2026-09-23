@@ -554,12 +554,17 @@ main h2 {
 	grid-template-columns: minmax(9.5rem, 13rem) minmax(0, 1fr);
 }
 
+.portrait {
+	display: block;
+	overflow: hidden;
+	aspect-ratio: 4 / 5;
+}
+
 .vignette img {
 	width: 100%;
-	height: auto;
-	aspect-ratio: 4 / 5;
+	height: 100%;
 	object-fit: cover;
-	object-position: center 22%;
+	object-position: center;
 	display: block;
 }
 
