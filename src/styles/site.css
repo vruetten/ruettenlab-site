@@ -504,6 +504,13 @@ h1,
 	text-wrap: balance;
 }
 
+main h2 {
+	margin: 1.6em 0 0.35em;
+	font-size: 1.35em;
+	font-weight: 650;
+	line-height: 1.15;
+}
+
 @media (max-width: 800px) {
 	nav ul {
 		flex-wrap: wrap;
