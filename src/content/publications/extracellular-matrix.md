@@ -1,9 +1,10 @@
 ---
 title: "Live imaging of the extracellular matrix with a glycan-binding fluorophore"
 year: 2025
-authors: "A Fiore, G Yu, JJ Northey, R Patel, TA Ravenscroft, R Ikegami, W Kolkman, ..."
+authors: "Antonio Fiore, Guoqiang Yu, Jason J. Northey, Ronak Patel, Thomas A. Ravenscroft, Richard Ikegami, Wiert Kolkman, Pratik Kumar, Tanya L. Dilan, Virginia M. S. Ruetten, Misha B. Ahrens, Hari Shroff, Shaohe Wang, Valerie M. Weaver, Kayvon Pedram"
 venue: "Nature Methods"
 url: "https://doi.org/10.1038/s41592-024-02590-2"
+figure: "extracellular-matrix.jpg"
 pdf: "extracellular-matrix.pdf"
 supplements:
   - label: "Supplementary information"

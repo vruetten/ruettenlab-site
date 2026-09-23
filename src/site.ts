@@ -1,4 +1,4 @@
-export const labName = 'Laboratory';
+export const labName = 'WHOLISTIC lab';
 export const email = 'vms.ruetten@gmail.com';
 export const janeliaUrl = 'https://wholistic.janelia.org/';
 
@@ -17,6 +17,12 @@ export const nav = [
 	{ path: 'news/', label: 'News' },
 	{ path: 'join/', label: 'Join' },
 ];
+
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function formatDate(date: Date): string {
+	return `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
 
 export function siteHref(path = ''): string {
 	const raw = import.meta.env.BASE_URL;

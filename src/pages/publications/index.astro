@@ -25,11 +25,33 @@ const papers = (await getCollection('publications')).sort((a, b) => {
 	return a.data.title.localeCompare(b.data.title);
 });
 
-const years: { year: number; papers: typeof papers }[] = [];
+type Paper = (typeof papers)[number];
+type Kind = 'paper' | 'preprint' | 'protocol';
+
+function kindOf(venue: string): Kind {
+	if (/protocols\.io/i.test(venue)) return 'protocol';
+	if (/biorxiv/i.test(venue)) return 'preprint';
+	return 'paper';
+}
+
+const kindOrder: Kind[] = ['paper', 'preprint', 'protocol'];
+const kindLabel: Record<Exclude<Kind, 'paper'>, string> = {
+	preprint: 'Preprints',
+	protocol: 'Protocols',
+};
+
+const years: { year: number; groups: { kind: Kind; papers: Paper[] }[] }[] = [];
 for (const paper of papers) {
 	const last = years[years.length - 1];
-	if (!last || last.year !== paper.data.year) years.push({ year: paper.data.year, papers: [paper] });
-	else last.papers.push(paper);
+	if (!last || last.year !== paper.data.year) years.push({ year: paper.data.year, groups: [] });
+	const year = years[years.length - 1];
+	const kind = kindOf(paper.data.venue);
+	const group = year.groups.find((item) => item.kind === kind);
+	if (group) group.papers.push(paper);
+	else year.groups.push({ kind, papers: [paper] });
+}
+for (const year of years) {
+	year.groups.sort((a, b) => kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind));
 }
 ---
 
@@ -48,31 +70,51 @@ for (const paper of papers) {
 			years.map((group) => (
 				<section>
 					<h2>{group.year}</h2>
-					<ol>
-						{group.papers.map((paper) => {
-							const figure = figureFor(paper.data.figure);
-							const page = hasBody(paper.body) ? siteHref(`publications/${paper.id}/`) : undefined;
-							return (
-								<li class:list={['paper', { 'has-figure': Boolean(figure) }]}>
-									{figure && (
-										<Image src={figure} alt={paper.data.title} width={160} loading="lazy" />
-									)}
-									<div>
-										<div class="paper-title">
-											{page ? <a href={page}>{paper.data.title}</a> : paper.data.title}
-										</div>
-										<div class="paper-venue">
-											<a href={paper.data.url}>{paper.data.venue}</a>
-										</div>
-										<div class="paper-authors">
-											<Authors authors={paper.data.authors} />
-										</div>
-										<PaperFiles pdf={paper.data.pdf} supplements={paper.data.supplements} />
-									</div>
-								</li>
-							);
-						})}
-					</ol>
+					<div>
+						{group.groups.map((kindGroup) => (
+							<div class="kind">
+								{kindGroup.kind !== 'paper' && <h3>{kindLabel[kindGroup.kind]}</h3>}
+								<ol>
+									{kindGroup.papers.map((paper) => {
+										const figure = figureFor(paper.data.figure);
+										const page = hasBody(paper.body)
+											? siteHref(`publications/${paper.id}/`)
+											: paper.data.url;
+										return (
+											<li class:list={['paper', { 'has-figure': Boolean(figure) }]}>
+												{figure && (
+													<Image src={figure} alt={paper.data.title} width={640} loading="lazy" />
+												)}
+												<div>
+													<div class="paper-head">
+														<a class="paper-title" href={page}>{paper.data.title}</a>
+														<span class="paper-venue">{paper.data.venue}</span>
+														<PaperFiles pdf={paper.data.pdf} />
+													</div>
+													<div class="paper-authors">
+														<Authors authors={paper.data.authors} />
+													</div>
+													{paper.data.featured && paper.data.featured.length > 0 && (
+														<div class="featured">
+															Featured by{' '}
+															{paper.data.featured.map((item, index) => (
+																<>
+																	{index > 0 ? ', ' : null}
+																	<a href={item.url} target="_blank" rel="noopener noreferrer">
+																		{item.label}
+																	</a>
+																</>
+															))}
+														</div>
+													)}
+												</div>
+											</li>
+										);
+									})}
+								</ol>
+							</div>
+						))}
+					</div>
 				</section>
 			))
 		}

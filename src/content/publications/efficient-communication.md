@@ -4,6 +4,7 @@ year: 2020
 authors: "G Baggio, V Rutten, G Hennequin, S Zampieri"
 venue: "Science Advances"
 url: "https://doi.org/10.1126/sciadv.aba2282"
+figure: "efficient-communication.jpg"
 supplements:
   - label: "Preprint"
     file: "efficient-communication-preprint.pdf"

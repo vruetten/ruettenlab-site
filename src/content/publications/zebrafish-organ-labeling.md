@@ -4,5 +4,6 @@ year: 2025
 authors: "A Petruncio, A Dev, V Ruetten, G Ihrke, A Weigel, CellMap Project Team"
 venue: "protocols.io"
 url: "https://www.protocols.io/view/labeling-of-zebrafish-organs-and-substructures-in-yxmvm3xobl3p/v1"
+figure: "zebrafish-organ-labeling.jpg"
 pdf: "zebrafish-organ-labeling.pdf"
 ---

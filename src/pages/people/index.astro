@@ -1,8 +1,25 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
+import { email } from '../../site';
+
+const portraits = import.meta.glob<{ default: ImageMetadata }>(
+	'../../assets/people/*.{jpg,jpeg,png,webp}',
+	{ eager: true },
+);
+
+function portraitFor(name: string | undefined) {
+	if (!name) return undefined;
+	const entry = Object.entries(portraits).find(([key]) => key.endsWith(`/${name}`));
+	if (!entry) throw new Error(`Missing portrait ${name}`);
+	return entry[1].default;
+}
 
 const people = (await getCollection('people')).sort((a, b) => {
+	const orderA = a.data.order ?? Number.POSITIVE_INFINITY;
+	const orderB = b.data.order ?? Number.POSITIVE_INFINITY;
+	if (orderA !== orderB) return orderA - orderB;
 	const byName = a.data.name.localeCompare(b.data.name);
 	if (byName !== 0) return byName;
 	return a.id.localeCompare(b.id);
@@ -10,16 +27,41 @@ const people = (await getCollection('people')).sort((a, b) => {
 ---
 
 <Base>
-	{
-		people.map(async (person) => {
-			const { Content } = await render(person);
-			return (
-				<article class="person">
-					<h1>{person.data.name}</h1>
-					<p class="role">{person.data.role}</p>
-					<Content />
-				</article>
-			);
-		})
-	}
+	<ul class="people">
+		{
+			people.map((person) => {
+				const photo = portraitFor(person.data.image);
+				const links = [
+					...(person.data.links ?? []),
+					...(person.data.showEmail ? [{ label: email, url: `mailto:${email}` }] : []),
+				];
+				return (
+					<li class:list={['vignette', { 'has-photo': Boolean(photo) }]}>
+						{photo && (
+							<Image
+								class:list={[`crop-${person.data.crop}`]}
+								src={photo}
+								alt=""
+								widths={[320, 640]}
+								sizes="(max-width: 800px) 14rem, 13rem"
+							/>
+						)}
+						<div>
+							<h2>{person.data.name}</h2>
+							{person.data.role ? <p class="role">{person.data.role}</p> : null}
+							{links.length > 0 && (
+								<ul class="person-links">
+									{links.map((link) => (
+										<li>
+											<a href={link.url}>{link.label}</a>
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					</li>
+				);
+			})
+		}
+	</ul>
 </Base>

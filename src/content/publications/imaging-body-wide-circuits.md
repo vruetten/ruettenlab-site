@@ -1,10 +1,22 @@
 ---
 title: "Imaging cellular activity across all organs reveals body-wide circuits"
 year: 2026
-authors: "VMS Ruetten, W Zheng, I Siwanowicz, BD Mensh, M Eddison, A Hu, Y Chi, ..."
+authors: "Virginie M. S. Ruetten, Wei Zheng, Igor Siwanowicz, Brett D. Mensh, Mark Eddison, Amy Hu, Yunfeng Chi, Andrew L. Lemire, Caiying Guo, Mykola Kadobianskyi, Marc Renz, Sara Lelek-Greskovic, Yisheng He, Kari Close, Gudrun Ihrke, Aparna Dev, Alyson Petruncio, Yinan Wan, Rongwei Zhang, Mark C. Fishman, Florian Engert, Benjamin Judkewitz, Mikail Rubinov, Philipp J. Keller, Chie Satou, Guoqiang Yu, Paul W. Tillberg, Maneesh Sahani, Misha B. Ahrens"
 venue: "Nature"
 url: "https://doi.org/10.1038/s41586-026-10979-6"
+figure: "imaging-body-wide-circuits.jpg"
 pdf: "imaging-body-wide-circuits.pdf"
+featured:
+  - label: "EurekAlert"
+    url: "https://www.eurekalert.org/news-releases/1143055"
+  - label: "Brightsurf"
+    url: "https://www.brightsurf.com/news/LDE23768/a-wholistic-view-of-cellular-communication-across-an-entire-animal.html"
+  - label: "ScienceAlert"
+    url: "https://www.sciencealert.com/scientists-can-now-watch-conversations-between-cells-across-the-body-of-a-living-animal"
+  - label: "CRBC News"
+    url: "https://www.crbcnews.com/articles/6aa51e1ad741dfef728823af"
+  - label: "The Times of India"
+    url: "https://timesofindia.indiatimes.com/science/discovery/scientists-built-a-system-that-watches-activity-across-nearly-every-cell-of-a-living-vertebrate-at-once-transparent-zebrafish-revealed-body-wide-signals-moving-between-organs/articleshow/134119222.cms"
 supplements:
   - label: "Supplementary information"
     file: "imaging-body-wide-circuits-supplementary-information.pdf"

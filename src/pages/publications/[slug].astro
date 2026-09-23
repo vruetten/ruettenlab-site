@@ -40,6 +40,19 @@ const figure = figureEntry?.[1].default;
 		<p>
 			<Authors authors={paper.data.authors} />
 		</p>
+		{paper.data.featured && paper.data.featured.length > 0 && (
+			<div class="featured">
+				Featured by{' '}
+				{paper.data.featured.map((item, index) => (
+					<>
+						{index > 0 ? ', ' : null}
+						<a href={item.url} target="_blank" rel="noopener noreferrer">
+							{item.label}
+						</a>
+					</>
+				))}
+			</div>
+		)}
 		{figure && <Image src={figure} alt={paper.data.title} width={720} loading="lazy" />}
 		<Content />
 		<PaperFiles pdf={paper.data.pdf} supplements={paper.data.supplements} />

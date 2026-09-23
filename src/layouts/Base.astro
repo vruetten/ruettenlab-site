@@ -43,26 +43,40 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 	</head>
 	<body>
 		<header class="wrap">
-			<a class="wordmark" href={siteHref()}>{labName}</a>
-			<nav>
-				<ul>
-					{
-						nav.map((item) => (
-							<li>
-								<a href={siteHref(item.path)}>{item.label}</a>
-							</li>
-						))
-					}
-				</ul>
-			</nav>
-			<div class="controls">
-				<div class="switch" role="group" aria-label="Style">
-					<button type="button" data-set-direction="a" aria-pressed="false">A</button>
-					<button type="button" data-set-direction="b" aria-pressed="false">B</button>
+			<div class="mast">
+				<a class="wordmark" href={siteHref()}>{labName}</a>
+				<nav>
+					<ul>
+						{
+							nav.map((item) => (
+								<li>
+									<a href={siteHref(item.path)}>{item.label}</a>
+								</li>
+							))
+						}
+					</ul>
+				</nav>
+			</div>
+			<div class="brand">
+				<div class="controls">
+					<div class="switch" role="group" aria-label="Style">
+						<button type="button" data-set-direction="a" aria-pressed="false">A</button>
+						<button type="button" data-set-direction="b" aria-pressed="false">B</button>
+					</div>
+					<button type="button" class="theme" data-toggle-theme aria-label="Switch to dark">
+						<svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
+							<circle cx="12" cy="12" r="4"></circle>
+							<path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.8 4.8l1.8 1.8M17.4 17.4l1.8 1.8M19.2 4.8l-1.8 1.8M6.6 17.4l-1.8 1.8"></path>
+						</svg>
+						<svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
+							<path d="M20 14.5A8.2 8.2 0 0 1 9.5 4 6.6 6.6 0 1 0 20 14.5z"></path>
+						</svg>
+					</button>
 				</div>
-				<div class="switch" role="group" aria-label="Color">
-					<button type="button" data-set-theme="light" aria-pressed="false">Light</button>
-					<button type="button" data-set-theme="dark" aria-pressed="false">Dark</button>
+				<div class="marks">
+					<img src={siteHref('marks/princeton-shield.svg')} alt="Princeton University" width="41" height="52" />
+					<img src={siteHref('marks/pni.svg')} alt="Princeton Neuroscience Institute" width="138" height="85" />
+					<img src={siteHref('marks/odbi.png')} alt="Omenn-Darling Bioengineering Institute" width="677" height="186" />
 				</div>
 			</div>
 		</header>
@@ -78,7 +92,7 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 		</main>
 		<footer class="contact-bar">
 			<a href={`mailto:${email}`}>{email}</a>
-			<a href={janeliaUrl}>WHOLISTIC at Janelia</a>
+			<a href={janeliaUrl}>WHOLISTIC</a>
 		</footer>
 		<script is:inline>
 			/* ruetten-direction */
@@ -87,24 +101,27 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 				var directionKey = 'ruetten-direction';
 				var themeKey = 'ruetten-theme';
 				function paint() {
-					var buttons = document.querySelectorAll('[data-set-direction], [data-set-theme]');
+					var buttons = document.querySelectorAll('[data-set-direction]');
 					for (var i = 0; i < buttons.length; i++) {
 						var button = buttons[i];
-						var pressed = false;
-						if (button.getAttribute('data-set-direction')) {
-							pressed = button.getAttribute('data-set-direction') === root.getAttribute('data-direction');
-						}
-						if (button.getAttribute('data-set-theme')) {
-							pressed = button.getAttribute('data-set-theme') === root.getAttribute('data-theme');
-						}
+						var pressed = button.getAttribute('data-set-direction') === root.getAttribute('data-direction');
 						button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+					}
+					var themeButton = document.querySelector('[data-toggle-theme]');
+					if (themeButton) {
+						var dark = root.getAttribute('data-theme') === 'dark';
+						themeButton.setAttribute('aria-pressed', dark ? 'true' : 'false');
+						themeButton.setAttribute('aria-label', dark ? 'Switch to light' : 'Switch to dark');
 					}
 				}
 				document.addEventListener('click', function (event) {
-					var button = event.target.closest('[data-set-direction], [data-set-theme]');
+					var button = event.target.closest('[data-set-direction], [data-toggle-theme]');
 					if (!button) return;
 					var direction = button.getAttribute('data-set-direction');
-					var theme = button.getAttribute('data-set-theme');
+					var theme = null;
+					if (button.hasAttribute('data-toggle-theme')) {
+						theme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+					}
 					try {
 						if (direction) {
 							root.setAttribute('data-direction', direction);
@@ -121,6 +138,34 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 					paint();
 				});
 				paint();
+			})();
+		</script>
+		<script is:inline>
+			(function () {
+				var origin = window.location.origin;
+				var links = document.querySelectorAll('a[href]');
+				for (var i = 0; i < links.length; i++) {
+					var link = links[i];
+					var href = link.getAttribute('href');
+					if (!href || href.charAt(0) === '#') continue;
+					var url;
+					try {
+						url = new URL(href, window.location.href);
+					} catch (error) {
+						continue;
+					}
+					var outside =
+						url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:');
+					if (!outside) {
+						if (link.getAttribute('target') === '_blank') link.removeAttribute('target');
+						continue;
+					}
+					link.setAttribute('target', '_blank');
+					var rel = link.getAttribute('rel') || '';
+					if (rel.indexOf('noopener') === -1) rel = (rel + ' noopener').trim();
+					if (rel.indexOf('noreferrer') === -1) rel = (rel + ' noreferrer').trim();
+					link.setAttribute('rel', rel);
+				}
 			})();
 		</script>
 	</body>

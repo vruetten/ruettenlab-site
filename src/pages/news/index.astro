@@ -1,25 +1,87 @@
 ---
+import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
+import { formatDate } from '../../site';
+
+const images = import.meta.glob<{ default: ImageMetadata }>(
+	'../../assets/news/*.{jpg,jpeg,png,webp}',
+	{ eager: true },
+);
+
+function imageFor(name: string) {
+	const entry = Object.entries(images).find(([key]) => key.endsWith(`/${name}`));
+	if (!entry) throw new Error(`Missing news image ${name}`);
+	return entry[1].default;
+}
+
+function widthsFor(image: ImageMetadata) {
+	const steps = [480, 768, 1200, 1600].filter((width) => width < image.width);
+	steps.push(image.width);
+	return steps;
+}
 
 const news = (await getCollection('news')).sort((a, b) => {
+	const byLead = Number(b.data.lead) - Number(a.data.lead);
+	if (byLead !== 0) return byLead;
+	const bySize = Number(a.data.size === 'small') - Number(b.data.size === 'small');
+	if (bySize !== 0) return bySize;
 	const byDate = b.data.date.valueOf() - a.data.date.valueOf();
 	if (byDate !== 0) return byDate;
-	return a.data.text.localeCompare(b.data.text);
+	const label = (item: (typeof news)[number]) =>
+		item.data.kind === 'press' ? item.data.title : item.data.text;
+	return label(a).localeCompare(label(b));
 });
+
+const press = news.filter((item) => item.data.kind === 'press');
+const lab = news.filter((item) => item.data.kind === 'lab');
 ---
 
 <Base>
-	<ul class="entries">
+	<ul class="press-grid">
 		{
-			news.map((item) => (
-				<li>
-					<time datetime={item.data.date.toISOString().slice(0, 10)}>
-						{item.data.date.toISOString().slice(0, 10)}
-					</time>
-					<span>{item.data.text}</span>
+			press.map((item) => {
+				const photo = imageFor(item.data.image);
+				return (
+				<li class:list={[{ small: item.data.size === 'small' }]}>
+					<a href={item.data.url} target="_blank" rel="noopener noreferrer">
+						<span class="press-figure">
+							<Image
+								src={photo}
+								alt=""
+								widths={widthsFor(photo)}
+								sizes="(max-width: 800px) 100vw, 33vw"
+								quality={90}
+							/>
+						</span>
+						<p class="press-meta">
+							<time datetime={item.data.date.toISOString().slice(0, 10)}>
+								{formatDate(item.data.date)}
+							</time>
+							<span>{item.data.outlet}</span>
+						</p>
+						<span class="press-title">{item.data.title}</span>
+					</a>
 				</li>
-			))
+				);
+			})
 		}
 	</ul>
+	{
+		lab.length > 0 && (
+			<section class="lab-news">
+				<h2>Lab</h2>
+				<ul class="lab-list">
+					{lab.map((item) => (
+						<li>
+							<time datetime={item.data.date.toISOString().slice(0, 10)}>
+								{formatDate(item.data.date)}
+							</time>
+							<span>{item.data.text}</span>
+						</li>
+					))}
+				</ul>
+			</section>
+		)
+	}
 </Base>

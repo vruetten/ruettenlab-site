@@ -1,13 +1,22 @@
 ---
 import { getCollection } from 'astro:content';
 import Base from '../layouts/Base.astro';
-import { labName, siteHref } from '../site';
+import { formatDate, labName, siteHref } from '../site';
 
-const news = (await getCollection('news')).sort((a, b) => {
-	const byDate = b.data.date.valueOf() - a.data.date.valueOf();
-	if (byDate !== 0) return byDate;
-	return a.data.text.localeCompare(b.data.text);
-});
+const news = (await getCollection('news'))
+	.sort((a, b) => {
+		const byLead = Number(b.data.lead) - Number(a.data.lead);
+		if (byLead !== 0) return byLead;
+		const bySize = Number(a.data.size === 'small') - Number(b.data.size === 'small');
+		if (bySize !== 0) return bySize;
+		const byDate = b.data.date.valueOf() - a.data.date.valueOf();
+		if (byDate !== 0) return byDate;
+		const label = (item: (typeof news)[number]) =>
+			item.data.kind === 'press' ? item.data.title : item.data.text;
+		return label(a).localeCompare(label(b));
+	})
+	.filter((item) => item.data.size !== 'small')
+	.slice(0, 5);
 const threads = await getCollection('research');
 const claim = threads[0]?.data.title ?? '';
 ---
@@ -21,17 +30,30 @@ const claim = threads[0]?.data.title ?? '';
 			<p class="sentence">This sentence is a placeholder.</p>
 			<p><a href={siteHref('join/')}>Join</a></p>
 		</div>
-		<ul class="news-list">
-			{
-				news.map((item) => (
-					<li>
-						<time datetime={item.data.date.toISOString().slice(0, 10)}>
-							{item.data.date.toISOString().slice(0, 10)}
-						</time>
-						<span>{item.data.text}</span>
-					</li>
-				))
-			}
-		</ul>
+		<div>
+			<ul class="news-list">
+				{
+					news.map((item) => (
+						<li>
+							<time datetime={item.data.date.toISOString().slice(0, 10)}>
+								{formatDate(item.data.date)}
+							</time>
+							{
+								item.data.kind === 'press' ? (
+									<a href={item.data.url} target="_blank" rel="noopener noreferrer">
+										{item.data.outlet}
+									</a>
+								) : (
+									<span>{item.data.text}</span>
+								)
+							}
+						</li>
+					))
+				}
+			</ul>
+			<p>
+				<a href={siteHref('news/')}>News</a>
+			</p>
+		</div>
 	</div>
 </Base>
