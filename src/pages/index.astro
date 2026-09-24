@@ -22,11 +22,10 @@ const threads = await getCollection('research');
 		<div>
 			<h1>{labName}</h1>
 			{threads[0]?.data.summary && <p class="sentence">{threads[0].data.summary}</p>}
-			<p class="join"><a href={siteHref('join/')}>Join</a></p>
 		</div>
 		<div>
 			<p>
-				<a href={siteHref('news/')}>News</a>
+				<a class="news-label" href={siteHref('news/')}>News</a>
 			</p>
 			<ul class="news-list">
 				{
@@ -38,7 +37,13 @@ const threads = await getCollection('research');
 							{
 								item.data.kind === 'press' ? (
 									<a href={item.data.url} target="_blank" rel="noopener noreferrer">
-										{item.data.line ?? `WHOLISTIC featured in ${item.data.outlet}`}
+										<span>{item.data.line ?? `WHOLISTIC featured in ${item.data.outlet}`}</span>
+									</a>
+								) : item.id === 'princeton-2027-09' ? (
+									<a class="join" href={siteHref('join/')}>
+										<span>
+											{item.data.text} <span class="join-word">Join!</span>
+										</span>
 									</a>
 								) : (
 									<span>{item.data.text}</span>

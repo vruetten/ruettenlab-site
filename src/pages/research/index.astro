@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import StudyFilm from '../../components/StudyFilm.astro';
 import Base from '../../layouts/Base.astro';
+import { janeliaUrl } from '../../site';
 
 const threads = await getCollection('research');
 const thread = threads[0];
@@ -12,7 +13,19 @@ const thread = threads[0];
 		thread && (
 			<div class="research">
 				<div>
-					<h1 class="lead">{thread.data.title}</h1>
+					<h1 class="lead">
+						{
+							thread.data.title.includes('WHOLISTIC') ? (
+								<>
+									{thread.data.title.split('WHOLISTIC')[0]}
+									<a href={janeliaUrl}>WHOLISTIC</a>
+									{thread.data.title.split('WHOLISTIC')[1]}
+								</>
+							) : (
+								thread.data.title
+							)
+						}
+					</h1>
 					{thread.data.summary && <p>{thread.data.summary}</p>}
 				</div>
 				<StudyFilm />
