@@ -1,6 +1,6 @@
 ---
 name: Nyoki
-role: Principal dumpling
+role: Principal Dumpling
 order: 2
 image: nyoki.jpg
 ---

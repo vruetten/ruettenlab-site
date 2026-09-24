@@ -1,6 +1,6 @@
 ---
 name: Virginie Ruetten
-role: Principal investigator
+role: Principal Investigator
 showEmail: true
 order: 1
 image: ruettenv.jpg
