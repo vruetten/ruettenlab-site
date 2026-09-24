@@ -32,7 +32,7 @@ const people = (await getCollection('people')).sort((a, b) => {
 });
 ---
 
-<Base>
+<Base showAddress>
 	<style slot="head" is:inline>
 		html:not([data-people='ready']) body {
 			opacity: 0;
