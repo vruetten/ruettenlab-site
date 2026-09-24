@@ -29,6 +29,18 @@ export function formatDate(date: Date, precision: 'day' | 'month' = 'day'): stri
 	return `${date.getUTCDate()} ${month} ${year}`;
 }
 
+export function isUpcoming(date: Date, precision: 'day' | 'month' = 'day'): boolean {
+	const now = new Date();
+	const year = now.getUTCFullYear();
+	const month = now.getUTCMonth();
+	if (precision === 'month') {
+		return date.getUTCFullYear() > year || (date.getUTCFullYear() === year && date.getUTCMonth() >= month);
+	}
+	const today = Date.UTC(year, month, now.getUTCDate());
+	const event = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+	return event >= today;
+}
+
 export function siteHref(path = ''): string {
 	const raw = import.meta.env.BASE_URL;
 	const base = raw.endsWith('/') ? raw : `${raw}/`;

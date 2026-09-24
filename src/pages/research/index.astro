@@ -11,7 +11,7 @@ const thread = threads[0];
 		thread && (
 			<>
 				<h1 class="lead">{thread.data.title}</h1>
-				<p>{thread.data.summary}</p>
+				{thread.data.summary && <p>{thread.data.summary}</p>}
 			</>
 		)
 	}

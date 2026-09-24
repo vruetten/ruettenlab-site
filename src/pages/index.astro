@@ -1,17 +1,10 @@
 ---
 import { getCollection } from 'astro:content';
 import Base from '../layouts/Base.astro';
-import { formatDate, labName, siteHref } from '../site';
+import { formatDate, isUpcoming, labName, siteHref } from '../site';
 
 const news = (await getCollection('news'))
 	.sort((a, b) => {
-		const byLead = Number(b.data.lead) - Number(a.data.lead);
-		if (byLead !== 0) return byLead;
-		const byPin = Number(b.data.pin) - Number(a.data.pin);
-		if (byPin !== 0) return byPin;
-		const rankA = a.data.rank ?? Number.POSITIVE_INFINITY;
-		const rankB = b.data.rank ?? Number.POSITIVE_INFINITY;
-		if (rankA !== rankB) return rankA - rankB;
 		const byDate = b.data.date.valueOf() - a.data.date.valueOf();
 		if (byDate !== 0) return byDate;
 		const label = (item: (typeof news)[number]) =>
@@ -28,21 +21,24 @@ const threads = await getCollection('research');
 	<div class="stage">
 		<div>
 			<h1>{labName}</h1>
-			<p class="sentence">{threads[0]?.data.summary}</p>
+			{threads[0]?.data.summary && <p class="sentence">{threads[0].data.summary}</p>}
 			<p><a href={siteHref('join/')}>Join</a></p>
 		</div>
 		<div>
+			<p>
+				<a href={siteHref('news/')}>News</a>
+			</p>
 			<ul class="news-list">
 				{
 					news.map((item) => (
-						<li>
+						<li class:list={[{ upcoming: isUpcoming(item.data.date, item.data.datePrecision) }]}>
 							<time datetime={item.data.date.toISOString().slice(0, 10)}>
 								{formatDate(item.data.date, item.data.datePrecision)}
 							</time>
 							{
 								item.data.kind === 'press' ? (
 									<a href={item.data.url} target="_blank" rel="noopener noreferrer">
-										{item.data.outlet}
+										{item.data.line ?? `WHOLISTIC featured in ${item.data.outlet}`}
 									</a>
 								) : (
 									<span>{item.data.text}</span>
@@ -52,9 +48,6 @@ const threads = await getCollection('research');
 					))
 				}
 			</ul>
-			<p>
-				<a href={siteHref('news/')}>News</a>
-			</p>
 		</div>
 	</div>
 </Base>

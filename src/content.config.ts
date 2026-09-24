@@ -73,6 +73,7 @@ const news = defineCollection({
 			pin: z.boolean().default(false),
 			rank: z.number().int().positive().optional(),
 			text: z.string().optional(),
+			line: z.string().optional(),
 		})
 		.check((ctx) => {
 			const item = ctx.value;

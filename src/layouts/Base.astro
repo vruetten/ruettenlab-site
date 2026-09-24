@@ -2,7 +2,7 @@
 import '../styles/site.css';
 import '../styles/direction-a.css';
 import '../styles/direction-b.css';
-import { email, janeliaUrl, labName, nav, odbiUrl, pniUrl, princetonUrl, siteHref } from '../site';
+import { email, labName, nav, odbiUrl, pniUrl, princetonUrl, siteHref } from '../site';
 
 interface Props {
 	showEmail?: boolean;
@@ -13,25 +13,14 @@ const { showEmail = false, frontmatter } = Astro.props;
 const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 ---
 
-<html lang="en" data-direction="b">
+<html lang="en" data-direction="b" data-theme="dark">
 	<head>
 		<script is:inline>
 			/* ruetten-direction */
 			(function () {
 				var root = document.documentElement;
-				var direction = 'b';
-				var theme = 'light';
-				try {
-					var storedDirection = localStorage.getItem('ruetten-direction');
-					var storedTheme = localStorage.getItem('ruetten-theme');
-					if (storedDirection === 'a' || storedDirection === 'b') direction = storedDirection;
-					if (storedTheme === 'light' || storedTheme === 'dark') theme = storedTheme;
-					else if (window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
-				} catch (error) {
-					theme = 'light';
-				}
-				root.setAttribute('data-direction', direction);
-				root.setAttribute('data-theme', theme);
+				root.setAttribute('data-direction', 'b');
+				root.setAttribute('data-theme', 'dark');
 			})();
 		</script>
 		<meta charset="utf-8" />
@@ -44,10 +33,11 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 	</head>
 	<body>
 		<header class="wrap">
-			<div class="mast">
-				<a class="wordmark" href={siteHref()}>{labName}</a>
-				<nav>
+			<nav>
 					<ul>
+						<li>
+							<a href={siteHref()}>{labName}</a>
+						</li>
 						{
 							nav.map((item) => (
 								<li>
@@ -55,9 +45,40 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 								</li>
 							))
 						}
+						<li class="institutes">
+							<a href={princetonUrl}>
+								<img class="lockup princeton-logo princeton-logo-color" src={siteHref('marks/princeton-wordmark.svg')} alt="Princeton University" width="263" height="72" />
+								<img class="lockup princeton-logo princeton-logo-white" src={siteHref('marks/princeton-wordmark-white.svg')} alt="Princeton University" width="1852" height="500" />
+								<img class="emblem princeton-logo princeton-logo-color" src={siteHref('marks/princeton-shield.svg')} alt="Princeton University" width="41" height="52" />
+								<img class="emblem princeton-logo princeton-logo-white" src={siteHref('marks/princeton-shield-light.svg')} alt="Princeton University" width="41" height="52" />
+							</a>
+							<a href={pniUrl}>
+								<img class="lockup pni pni-color" src={siteHref('marks/pni.svg')} alt="Princeton Neuroscience Institute" width="341" height="85" />
+								<img class="lockup pni pni-dark" src={siteHref('marks/pni-dark.svg')} alt="Princeton Neuroscience Institute" width="341" height="85" />
+								<img class="emblem pni pni-color" src={siteHref('marks/pni-crest.svg')} alt="Princeton Neuroscience Institute" width="142" height="85" />
+								<img class="emblem pni pni-dark" src={siteHref('marks/pni-crest-dark.svg')} alt="Princeton Neuroscience Institute" width="142" height="85" />
+							</a>
+							<a href={odbiUrl}>
+								<img class="lockup odbi odbi-color" src={siteHref('marks/odbi.png')} alt="Omenn-Darling Bioengineering Institute" width="677" height="186" />
+								<img class="lockup odbi odbi-dark" src={siteHref('marks/odbi-dark.png')} alt="Omenn-Darling Bioengineering Institute" width="677" height="186" />
+								<img class="emblem odbi odbi-color" src={siteHref('marks/odbi-crest.png')} alt="Omenn-Darling Bioengineering Institute" width="258" height="186" />
+								<img class="emblem odbi odbi-dark" src={siteHref('marks/odbi-crest-dark.png')} alt="Omenn-Darling Bioengineering Institute" width="258" height="186" />
+							</a>
+						</li>
 					</ul>
-				</nav>
-			</div>
+			</nav>
+		</header>
+		<main class="wrap">
+			<slot />
+			{
+				emailUnderBody && (
+					<p class="contact">
+						<a href={`mailto:${email}`}>{email}</a>
+					</p>
+				)
+			}
+		</main>
+		<footer class="contact-bar">
 			<div class="marks">
 				<a href={princetonUrl}>
 					<img class="princeton-logo princeton-logo-color" src={siteHref('marks/princeton-wordmark.svg')} alt="Princeton University" width="263" height="72" />
@@ -72,81 +93,7 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 					<img class="odbi odbi-dark" src={siteHref('marks/odbi-dark.png')} alt="Omenn-Darling Bioengineering Institute" width="677" height="186" />
 				</a>
 			</div>
-			<div class="controls">
-				<div class="switch" role="group" aria-label="Style">
-					<button type="button" data-set-direction="a" aria-pressed="false">A</button>
-					<button type="button" data-set-direction="b" aria-pressed="false">B</button>
-				</div>
-				<button type="button" class="theme" data-toggle-theme aria-label="Switch to dark">
-					<svg class="sun" viewBox="0 0 24 24" aria-hidden="true">
-						<circle cx="12" cy="12" r="4"></circle>
-						<path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.8 4.8l1.8 1.8M17.4 17.4l1.8 1.8M19.2 4.8l-1.8 1.8M6.6 17.4l-1.8 1.8"></path>
-					</svg>
-					<svg class="moon" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M20 14.5A8.2 8.2 0 0 1 9.5 4 6.6 6.6 0 1 0 20 14.5z"></path>
-					</svg>
-				</button>
-			</div>
-		</header>
-		<main class="wrap">
-			<slot />
-			{
-				emailUnderBody && (
-					<p class="contact">
-						<a href={`mailto:${email}`}>{email}</a>
-					</p>
-				)
-			}
-		</main>
-		<footer class="contact-bar">
-			<a class="soft" href={janeliaUrl}>WHOLISTIC</a>
 		</footer>
-		<script is:inline>
-			/* ruetten-direction */
-			(function () {
-				var root = document.documentElement;
-				var directionKey = 'ruetten-direction';
-				var themeKey = 'ruetten-theme';
-				function paint() {
-					var buttons = document.querySelectorAll('[data-set-direction]');
-					for (var i = 0; i < buttons.length; i++) {
-						var button = buttons[i];
-						var pressed = button.getAttribute('data-set-direction') === root.getAttribute('data-direction');
-						button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-					}
-					var themeButton = document.querySelector('[data-toggle-theme]');
-					if (themeButton) {
-						var dark = root.getAttribute('data-theme') === 'dark';
-						themeButton.setAttribute('aria-pressed', dark ? 'true' : 'false');
-						themeButton.setAttribute('aria-label', dark ? 'Switch to light' : 'Switch to dark');
-					}
-				}
-				document.addEventListener('click', function (event) {
-					var button = event.target.closest('[data-set-direction], [data-toggle-theme]');
-					if (!button) return;
-					var direction = button.getAttribute('data-set-direction');
-					var theme = null;
-					if (button.hasAttribute('data-toggle-theme')) {
-						theme = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-					}
-					try {
-						if (direction) {
-							root.setAttribute('data-direction', direction);
-							localStorage.setItem(directionKey, direction);
-						}
-						if (theme) {
-							root.setAttribute('data-theme', theme);
-							localStorage.setItem(themeKey, theme);
-						}
-					} catch (error) {
-						if (direction) root.setAttribute('data-direction', direction);
-						if (theme) root.setAttribute('data-theme', theme);
-					}
-					paint();
-				});
-				paint();
-			})();
-		</script>
 		<script is:inline>
 			(function () {
 				var origin = window.location.origin;

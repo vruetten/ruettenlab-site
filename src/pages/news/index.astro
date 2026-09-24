@@ -2,7 +2,7 @@
 import { Image } from 'astro:assets';
 import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
-import { formatDate } from '../../site';
+import { formatDate, isUpcoming } from '../../site';
 
 const images = import.meta.glob<{ default: ImageMetadata }>(
 	'../../assets/news/*.{jpg,jpeg,png,webp}',
@@ -62,27 +62,50 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 				const title = item.data.kind === 'press' ? item.data.title : item.data.text;
 				const alt = item.data.kind === 'lab' ? 'Nassau Hall at Princeton University' : '';
 				return (
-				<li class:list={[{ small: item.data.size === 'small' }]}>
-					<a href={item.data.url} target="_blank" rel="noopener noreferrer">
-						<span class="press-figure">
-							<Image
-								src={photo}
-								alt={alt}
-								widths={widthsFor(photo)}
-								sizes="(max-width: 800px) 100vw, 33vw"
-								quality={90}
-								loading="eager"
-								decoding="async"
-							/>
-						</span>
-						<p class="press-meta">
-							<time datetime={item.data.date.toISOString().slice(0, 10)}>
-								{formatDate(item.data.date, item.data.datePrecision)}
-							</time>
-							{item.data.outlet && <span>{item.data.outlet}</span>}
-						</p>
-						<span class="press-title">{title}</span>
-					</a>
+				<li class:list={[{ small: item.data.size === 'small', upcoming: isUpcoming(item.data.date, item.data.datePrecision) }]}>
+					{item.data.url ? (
+						<a class="press-card" href={item.data.url} target="_blank" rel="noopener noreferrer">
+							<span class="press-figure">
+								<Image
+									src={photo}
+									alt={alt}
+									widths={widthsFor(photo)}
+									sizes="(max-width: 800px) 100vw, 33vw"
+									quality={90}
+									loading="eager"
+									decoding="async"
+								/>
+							</span>
+							<p class="press-meta">
+								<time datetime={item.data.date.toISOString().slice(0, 10)}>
+									{formatDate(item.data.date, item.data.datePrecision)}
+								</time>
+								{item.data.outlet && <span>{item.data.outlet}</span>}
+							</p>
+							<span class="press-title">{title}</span>
+						</a>
+					) : (
+						<div class="press-card">
+							<span class="press-figure">
+								<Image
+									src={photo}
+									alt={alt}
+									widths={widthsFor(photo)}
+									sizes="(max-width: 800px) 100vw, 33vw"
+									quality={90}
+									loading="eager"
+									decoding="async"
+								/>
+							</span>
+							<p class="press-meta">
+								<time datetime={item.data.date.toISOString().slice(0, 10)}>
+									{formatDate(item.data.date, item.data.datePrecision)}
+								</time>
+								{item.data.outlet && <span>{item.data.outlet}</span>}
+							</p>
+							<span class="press-title">{title}</span>
+						</div>
+					)}
 				</li>
 				);
 			})
@@ -94,7 +117,7 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 				<h2>Lab</h2>
 				<ul class="lab-list">
 					{lab.map((item) => (
-						<li>
+						<li class:list={[{ upcoming: isUpcoming(item.data.date, item.data.datePrecision) }]}>
 							<time datetime={item.data.date.toISOString().slice(0, 10)}>
 								{formatDate(item.data.date, item.data.datePrecision)}
 							</time>

@@ -1,5 +1,6 @@
 ---
 name: Nyoki
-role: ""
+role: Principal helper
+order: 2
 image: nyoki.jpg
 ---
