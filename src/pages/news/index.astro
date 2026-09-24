@@ -41,6 +41,18 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 ---
 
 <Base>
+	<style slot="head" is:inline>
+		html:not([data-news='ready']) body {
+			opacity: 0;
+		}
+	</style>
+	<noscript slot="head">
+		<style is:inline>
+			body {
+				opacity: 1 !important;
+			}
+		</style>
+	</noscript>
 	<ul class="press-grid">
 		{
 			cards.map((item) => {
@@ -59,6 +71,8 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 								widths={widthsFor(photo)}
 								sizes="(max-width: 800px) 100vw, 33vw"
 								quality={90}
+								loading="eager"
+								decoding="async"
 							/>
 						</span>
 						<p class="press-meta">
@@ -91,4 +105,37 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 			</section>
 		)
 	}
+	<script is:inline>
+		(function () {
+			var root = document.documentElement;
+			var images = document.querySelectorAll('.press-figure img');
+			var remaining = images.length;
+			function reveal() {
+				root.setAttribute('data-news', 'ready');
+			}
+			if (!remaining) {
+				reveal();
+				return;
+			}
+			function finish() {
+				remaining -= 1;
+				if (remaining <= 0) reveal();
+			}
+			function settle(img) {
+				if (img.complete && img.naturalWidth > 0) {
+					finish();
+					return;
+				}
+				if (img.complete) {
+					if (typeof img.decode === 'function') img.decode().then(finish, finish);
+					else finish();
+					return;
+				}
+				img.addEventListener('load', finish, { once: true });
+				img.addEventListener('error', finish, { once: true });
+			}
+			for (var i = 0; i < images.length; i++) settle(images[i]);
+			setTimeout(reveal, 12000);
+		})();
+	</script>
 </Base>
