@@ -706,6 +706,19 @@ main h2 {
 	.people {
 		grid-template-columns: minmax(0, 16rem);
 	}
+
+	.years section {
+		grid-template-columns: minmax(0, 1fr);
+		row-gap: 0.85rem;
+	}
+
+	.paper-head {
+		flex-wrap: wrap;
+	}
+
+	.paper-title {
+		flex-basis: 100%;
+	}
 }
 
 .vignette {
