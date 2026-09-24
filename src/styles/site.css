@@ -345,15 +345,12 @@ html[data-theme='dark'] .press-title {
 
 .research {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(12rem, 28%);
-	column-gap: clamp(1.5rem, 4vw, 3rem);
-	align-items: start;
+	justify-items: start;
 }
 
 .film {
-	width: 100%;
-	margin: 0.4rem 0 0;
-	justify-self: end;
+	width: min(24rem, 100%);
+	margin: 0.85rem 0 0;
 }
 
 .film video,
@@ -367,12 +364,6 @@ html[data-theme='dark'] .press-title {
 	display: none;
 }
 
-.film figcaption {
-	margin: 0.55rem 0 0;
-	font-size: 0.72em;
-	line-height: 1.4;
-}
-
 @media (prefers-reduced-motion: reduce) {
 	.film video {
 		display: none;
@@ -383,21 +374,25 @@ html[data-theme='dark'] .press-title {
 	}
 }
 
-@media (max-width: 800px) {
-	.research {
-		grid-template-columns: 1fr;
-	}
-
-	.film {
-		max-width: 14rem;
-		margin-top: 1.25rem;
-	}
-}
-
 .stage {
 	display: grid;
 	gap: clamp(2rem, 5vh, 3.5rem);
 	padding-block: clamp(1.5rem, 6vh, 3.5rem) clamp(2rem, 6vh, 4rem);
+}
+
+html[data-direction] .stage h1 {
+	margin-bottom: 0.55em;
+}
+
+.stage .join {
+	margin: 0;
+	font-size: 1em;
+	line-height: 1.6;
+}
+
+.stage .join a {
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
 }
 
 .news-list,
@@ -419,12 +414,14 @@ html[data-theme='dark'] .press-title {
 }
 
 .news-list a {
+	justify-self: start;
 	text-decoration: none;
+	border-bottom: 1px solid transparent;
 }
 
 .news-list a:hover,
 .news-list a:focus-visible {
-	text-decoration: underline;
+	border-bottom-color: currentColor;
 }
 
 .news-list li,
@@ -590,6 +587,35 @@ html[data-theme='dark'] .press-grid li.upcoming .press-meta {
 	min-width: 0;
 }
 
+.paper-title,
+.profiles a,
+.featured a,
+.paper-files a,
+.paper-page > p a,
+main .contact a,
+.person-links a {
+	text-decoration: none;
+	text-underline-offset: 0.08em;
+}
+
+.paper-title:hover,
+.paper-title:focus-visible,
+.profiles a:hover,
+.profiles a:focus-visible,
+.featured a:hover,
+.featured a:focus-visible,
+.paper-files a:hover,
+.paper-files a:focus-visible,
+.paper-page > p a:hover,
+.paper-page > p a:focus-visible,
+main .contact a:hover,
+main .contact a:focus-visible,
+.person-links a:hover,
+.person-links a:focus-visible {
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+}
+
 .paper-venue {
 	flex: none;
 }
@@ -726,6 +752,7 @@ main h2 {
 	max-width: none;
 	font-size: 1rem;
 	line-height: 1.25;
+	color: var(--link);
 }
 
 .person-links {

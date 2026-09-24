@@ -22,7 +22,7 @@ const threads = await getCollection('research');
 		<div>
 			<h1>{labName}</h1>
 			{threads[0]?.data.summary && <p class="sentence">{threads[0].data.summary}</p>}
-			<p><a href={siteHref('join/')}>Join</a></p>
+			<p class="join"><a href={siteHref('join/')}>Join</a></p>
 		</div>
 		<div>
 			<p>
