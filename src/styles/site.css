@@ -45,9 +45,20 @@ body {
 	flex-direction: column;
 }
 
-a,
-.press-title,
-.news-list a > span {
+a:any-link,
+a:-webkit-any-link {
+	-webkit-text-decoration: none;
+	text-decoration: none;
+}
+
+a:hover,
+a:focus-visible,
+.news-list a:hover > span,
+.news-list a:focus-visible > span,
+.press-grid a:hover .press-title,
+.press-grid a:focus-visible .press-title {
+	-webkit-text-decoration: underline;
+	text-decoration-line: underline;
 	text-decoration-thickness: 2px;
 	text-underline-offset: 0.12em;
 }
@@ -152,12 +163,17 @@ nav li.institutes img.emblem {
 }
 
 @media (max-width: 980px) {
-	nav li.institutes {
+	nav li.institutes a.pni,
+	nav li.institutes a.odbi {
 		display: none;
 	}
 
 	nav ul {
 		flex-wrap: wrap;
+	}
+
+	nav ul.is-wrapped li.institutes {
+		margin-left: 0;
 	}
 }
 
@@ -233,6 +249,26 @@ html:not([data-theme='dark']) .theme .moon {
 main.wrap {
 	flex: 1 0 auto;
 	padding-block: clamp(1.25rem, 4vh, 2.75rem) 0;
+}
+
+main.with-postal {
+	display: flex;
+	flex-direction: column;
+}
+
+.postal {
+	margin-top: auto;
+	padding-block: 2.5rem 1.25rem;
+	font-style: normal;
+	line-height: 1.35;
+}
+
+.postal span {
+	display: block;
+}
+
+main .postal h2 {
+	margin: 0 0 0.55rem;
 }
 
 .contact-bar {

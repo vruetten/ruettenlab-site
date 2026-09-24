@@ -2,15 +2,17 @@
 import '../styles/site.css';
 import '../styles/direction-a.css';
 import '../styles/direction-b.css';
-import { email, labName, nav, odbiUrl, pniUrl, princetonUrl, siteHref } from '../site';
+import { email, labName, nav, odbiUrl, pniUrl, postalAddress, princetonUrl, siteHref } from '../site';
 
 interface Props {
 	showEmail?: boolean;
-	frontmatter?: { showEmail?: boolean };
+	showAddress?: boolean;
+	frontmatter?: { showEmail?: boolean; showAddress?: boolean };
 }
 
-const { showEmail = false, frontmatter } = Astro.props;
+const { showEmail = false, showAddress = false, frontmatter } = Astro.props;
 const emailUnderBody = showEmail || frontmatter?.showEmail === true;
+const addressUnderBody = showAddress || frontmatter?.showAddress === true;
 ---
 
 <html lang="en" data-direction="b" data-theme="dark">
@@ -49,6 +51,35 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 				}
 				if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markOutsideLinks);
 				else markOutsideLinks();
+				function placeCrest() {
+					var ul = document.querySelector('nav ul');
+					if (!ul) return;
+					var crest = ul.querySelector('li.institutes');
+					var tabs = ul.querySelectorAll('li:not(.institutes)');
+					if (!crest || tabs.length < 2) return;
+					function sameRow(a, b) {
+						var ar = a.getBoundingClientRect();
+						var br = b.getBoundingClientRect();
+						var mid = br.top + br.height / 2;
+						return mid >= ar.top - 2 && mid <= ar.bottom + 2;
+					}
+					ul.classList.add('is-wrapped');
+					var wrapped = !sameRow(tabs[0], crest);
+					if (!wrapped) {
+						for (var i = 1; i < tabs.length; i++) {
+							if (!sameRow(tabs[0], tabs[i])) {
+								wrapped = true;
+								break;
+							}
+						}
+					}
+					if (wrapped) return;
+					ul.classList.remove('is-wrapped');
+					if (!sameRow(tabs[0], crest)) ul.classList.add('is-wrapped');
+				}
+				if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', placeCrest);
+				else placeCrest();
+				window.addEventListener('resize', placeCrest);
 			})();
 		</script>
 		<meta charset="utf-8" />
@@ -74,19 +105,19 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 							))
 						}
 						<li class="institutes">
-							<a href={princetonUrl}>
+							<a class="princeton" href={princetonUrl}>
 								<img class="lockup princeton-logo princeton-logo-color" src={siteHref('marks/princeton-wordmark.svg')} alt="Princeton University" width="263" height="72" />
 								<img class="lockup princeton-logo princeton-logo-white" src={siteHref('marks/princeton-wordmark-white.svg')} alt="Princeton University" width="1852" height="500" />
 								<img class="emblem princeton-logo princeton-logo-color" src={siteHref('marks/princeton-shield.svg')} alt="Princeton University" width="41" height="52" />
 								<img class="emblem princeton-logo princeton-logo-white" src={siteHref('marks/princeton-shield-light.svg')} alt="Princeton University" width="41" height="52" />
 							</a>
-							<a href={pniUrl}>
+							<a class="pni" href={pniUrl}>
 								<img class="lockup pni pni-color" src={siteHref('marks/pni.svg')} alt="Princeton Neuroscience Institute" width="341" height="85" />
 								<img class="lockup pni pni-dark" src={siteHref('marks/pni-dark.svg')} alt="Princeton Neuroscience Institute" width="341" height="85" />
 								<img class="emblem pni pni-color" src={siteHref('marks/pni-crest.svg')} alt="Princeton Neuroscience Institute" width="142" height="85" />
 								<img class="emblem pni pni-dark" src={siteHref('marks/pni-crest-dark.svg')} alt="Princeton Neuroscience Institute" width="142" height="85" />
 							</a>
-							<a href={odbiUrl}>
+							<a class="odbi" href={odbiUrl}>
 								<img class="lockup odbi odbi-color" src={siteHref('marks/odbi.png')} alt="Omenn-Darling Bioengineering Institute" width="677" height="186" />
 								<img class="lockup odbi odbi-dark" src={siteHref('marks/odbi-dark.png')} alt="Omenn-Darling Bioengineering Institute" width="677" height="186" />
 								<img class="emblem odbi odbi-color" src={siteHref('marks/odbi-crest.png')} alt="Omenn-Darling Bioengineering Institute" width="258" height="186" />
@@ -96,13 +127,25 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 					</ul>
 			</nav>
 		</header>
-		<main class="wrap">
-			<slot />
+		<main class:list={['wrap', { 'with-postal': addressUnderBody }]}>
+			<div class="page">
+				<slot />
+				{
+					emailUnderBody && (
+						<p class="contact">
+							<a href={`mailto:${email}`}>{email}</a>
+						</p>
+					)
+				}
+			</div>
 			{
-				emailUnderBody && (
-					<p class="contact">
-						<a href={`mailto:${email}`}>{email}</a>
-					</p>
+				addressUnderBody && (
+					<address class="postal">
+						<h2>Mailing address</h2>
+						{postalAddress.map((line) => (
+							<span>{line}</span>
+						))}
+					</address>
 				)
 			}
 		</main>

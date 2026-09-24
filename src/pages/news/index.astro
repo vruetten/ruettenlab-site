@@ -60,6 +60,10 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 				if (!name) return null;
 				const photo = imageFor(name);
 				const title = item.data.kind === 'press' ? item.data.title : item.data.text;
+				const credit =
+					item.data.kind === 'press' && item.data.outlet
+						? `Featured by ${item.data.outlet}`
+						: '';
 				const alt = item.data.kind === 'lab' ? 'Nassau Hall at Princeton University' : '';
 				return (
 				<li class:list={[{ small: item.data.size === 'small', upcoming: isUpcoming(item.data.date, item.data.datePrecision) }]}>
@@ -80,7 +84,7 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 								<time datetime={item.data.date.toISOString().slice(0, 10)}>
 									{formatDate(item.data.date, item.data.datePrecision)}
 								</time>
-								{item.data.outlet && <span>{item.data.outlet}</span>}
+								{credit && <span>{credit}</span>}
 							</p>
 							<span class="press-title">{title}</span>
 						</a>
@@ -101,7 +105,7 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 								<time datetime={item.data.date.toISOString().slice(0, 10)}>
 									{formatDate(item.data.date, item.data.datePrecision)}
 								</time>
-								{item.data.outlet && <span>{item.data.outlet}</span>}
+								{credit && <span>{credit}</span>}
 							</p>
 							<span class="press-title">{title}</span>
 						</div>

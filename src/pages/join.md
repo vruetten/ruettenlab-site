@@ -1,6 +1,7 @@
 ---
 layout: ../layouts/Base.astro
 showEmail: true
+showAddress: true
 ---
 
 The lab opens in September 2027 and is hiring its first postdoctoral fellows and PhD students!

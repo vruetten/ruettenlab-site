@@ -1,5 +1,12 @@
 export const labName = 'WHOLISTIC lab';
 export const email = 'v.ruetten@princeton.edu';
+export const postalAddress = [
+	'Ruetten Group',
+	'Princeton University',
+	'Omenn-Darling Bioengineering Institute',
+	'35 Ivy Lane',
+	'Princeton, NJ 08540',
+];
 export const janeliaUrl = 'https://wholistic.janelia.org/';
 export const princetonUrl = 'https://www.princeton.edu/';
 export const pniUrl = 'https://pni.princeton.edu/';
