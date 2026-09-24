@@ -1,0 +1,17 @@
+---
+import { siteHref } from '../site';
+
+const movie = siteHref('research/wholistic-imaging.mp4');
+const still = siteHref('research/wholistic-imaging.jpg');
+---
+
+<figure class="film">
+	<video autoplay muted loop playsinline poster={still}>
+		<source src={movie} type="video/mp4" />
+	</video>
+	<img class="still" src={still} alt="" />
+	<figcaption>
+		Sagittal view of Tg(ubi:tTA; TRE:GCaMP7f) with major organs indicated, imaged with a 20× 0.75 NA air
+		objective, sped up about 50 times.
+	</figcaption>
+</figure>

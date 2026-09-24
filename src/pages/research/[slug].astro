@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import StudyFilm from '../../components/StudyFilm.astro';
 import Base from '../../layouts/Base.astro';
 
 export async function getStaticPaths() {
@@ -14,8 +15,11 @@ const { thread } = Astro.props;
 ---
 
 <Base>
-	<article class="thread">
-		<h1 class="lead">{thread.data.title}</h1>
-		{thread.data.summary && <p>{thread.data.summary}</p>}
+	<article class="thread research">
+		<div>
+			<h1 class="lead">{thread.data.title}</h1>
+			{thread.data.summary && <p>{thread.data.summary}</p>}
+		</div>
+		<StudyFilm />
 	</article>
 </Base>

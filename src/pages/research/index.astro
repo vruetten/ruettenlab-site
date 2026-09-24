@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import StudyFilm from '../../components/StudyFilm.astro';
 import Base from '../../layouts/Base.astro';
 
 const threads = await getCollection('research');
@@ -9,10 +10,13 @@ const thread = threads[0];
 <Base>
 	{
 		thread && (
-			<>
-				<h1 class="lead">{thread.data.title}</h1>
-				{thread.data.summary && <p>{thread.data.summary}</p>}
-			</>
+			<div class="research">
+				<div>
+					<h1 class="lead">{thread.data.title}</h1>
+					{thread.data.summary && <p>{thread.data.summary}</p>}
+				</div>
+				<StudyFilm />
+			</div>
 		)
 	}
 </Base>
