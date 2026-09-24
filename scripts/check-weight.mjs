@@ -53,7 +53,12 @@ for (const file of await htmlFiles(root)) {
 		const src = match[1].match(/\ssrc="([^"]+)"/);
 		if (src) bytes += await fileBytes(src[1]);
 		js += bytes;
-		if (!match[2].includes('ruetten-direction') && !match[2].includes('ruetten-theme')) otherJs += bytes;
+		const hold =
+			match[2].includes('ruetten-direction') ||
+			match[2].includes('ruetten-theme') ||
+			match[2].includes("setAttribute('data-news'") ||
+			match[2].includes("setAttribute('data-people'");
+		if (!hold) otherJs += bytes;
 	}
 	for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
 		css += byteLength(match[1]);
