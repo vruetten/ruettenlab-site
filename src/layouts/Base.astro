@@ -21,6 +21,34 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 				var root = document.documentElement;
 				root.setAttribute('data-direction', 'b');
 				root.setAttribute('data-theme', 'dark');
+				function markOutsideLinks() {
+					var origin = window.location.origin;
+					var links = document.querySelectorAll('a[href]');
+					for (var i = 0; i < links.length; i++) {
+						var link = links[i];
+						var href = link.getAttribute('href');
+						if (!href || href.charAt(0) === '#') continue;
+						var url;
+						try {
+							url = new URL(href, window.location.href);
+						} catch (error) {
+							continue;
+						}
+						var outside =
+							url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:');
+						if (!outside) {
+							if (link.getAttribute('target') === '_blank') link.removeAttribute('target');
+							continue;
+						}
+						link.setAttribute('target', '_blank');
+						var rel = link.getAttribute('rel') || '';
+						if (rel.indexOf('noopener') === -1) rel = (rel + ' noopener').trim();
+						if (rel.indexOf('noreferrer') === -1) rel = (rel + ' noreferrer').trim();
+						link.setAttribute('rel', rel);
+					}
+				}
+				if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', markOutsideLinks);
+				else markOutsideLinks();
 			})();
 		</script>
 		<meta charset="utf-8" />
@@ -94,33 +122,5 @@ const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 				</a>
 			</div>
 		</footer>
-		<script is:inline>
-			(function () {
-				var origin = window.location.origin;
-				var links = document.querySelectorAll('a[href]');
-				for (var i = 0; i < links.length; i++) {
-					var link = links[i];
-					var href = link.getAttribute('href');
-					if (!href || href.charAt(0) === '#') continue;
-					var url;
-					try {
-						url = new URL(href, window.location.href);
-					} catch (error) {
-						continue;
-					}
-					var outside =
-						url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:');
-					if (!outside) {
-						if (link.getAttribute('target') === '_blank') link.removeAttribute('target');
-						continue;
-					}
-					link.setAttribute('target', '_blank');
-					var rel = link.getAttribute('rel') || '';
-					if (rel.indexOf('noopener') === -1) rel = (rel + ' noopener').trim();
-					if (rel.indexOf('noreferrer') === -1) rel = (rel + ' noreferrer').trim();
-					link.setAttribute('rel', rel);
-				}
-			})();
-		</script>
 	</body>
 </html>
