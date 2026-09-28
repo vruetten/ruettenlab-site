@@ -345,6 +345,25 @@ main .contact a {
 	text-decoration-line: none;
 }
 
+.contact .linkedin {
+	display: inline-block;
+	margin-left: 0.55em;
+	line-height: 0;
+	vertical-align: -0.2em;
+}
+
+.contact .linkedin svg {
+	display: block;
+	width: 1.15em;
+	height: 1.15em;
+}
+
+a.linkedin:hover,
+a.linkedin:focus-visible {
+	-webkit-text-decoration: none;
+	text-decoration: none;
+}
+
 html[data-theme='dark'] main a,
 html[data-theme='dark'] .contact-bar a {
 	color: var(--link);
@@ -382,6 +401,14 @@ html[data-theme='dark'] .news-list a.join .join-word {
 .research {
 	display: grid;
 	justify-items: start;
+}
+
+.research p {
+	margin: 0;
+}
+
+.research p + p {
+	margin-top: 0.35em;
 }
 
 .film {

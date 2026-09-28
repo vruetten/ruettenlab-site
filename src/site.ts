@@ -1,5 +1,6 @@
 export const labName = 'WHOLISTIC lab';
 export const email = 'v.ruetten@princeton.edu';
+export const linkedinUrl = 'https://www.linkedin.com/in/virginie-ms-ruetten-1478709b/';
 export const postalAddress = [
 	'Ruetten Group',
 	'Princeton University',
