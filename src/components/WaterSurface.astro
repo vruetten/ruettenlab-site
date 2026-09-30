@@ -14,7 +14,36 @@
 	});
 
 	// WATER-BEGIN
-	function startWater(canvas) {
+	// Every tunable, with its default. startWater() returns the live copy, so a page can
+	// change a value while the water runs. A function, so it is hoisted above the call.
+	function waterDefaults() {
+		return {
+		ripples: false, // clicks, drags and rain raise waves
+		speed: 0.24, // propagation: how far a ring travels per step, at most 0.5
+		damping: 0.997, // persistence: height kept per step
+		viscosity: 0.006, // how fast crests round off
+		oscillation: 6.5, // crests per drop: the wave-train frequency
+		dropSize: 0.04, // drop radius as a fraction of the panel width
+		dropStrength: 0.5, // height a click adds
+		dragStrength: 0.2, // height a fast drag adds per drop
+		rainEvery: 2.8, // seconds between random drops
+		shading: 2.8, // ring shading gain
+		shine: 0.24, // specular weight of the sheen
+		swell: 1, // amplitude of the slow analytic swell
+		starBrightness: 0.42, // base brightness of the word's stars
+		starSize: 3.2, // base size of the word's stars, in CSS pixels
+		glint: 1, // how much a wave slope brightens a star
+		twinkle: 0.28, // depth of the twinkle
+		pushRadius: 0.06, // reach of the cursor's push, as a fraction of panel height
+		pushStrength: 2.2, // impulse the cursor gives a star
+		spring: 9, // pull back home
+		coast: 3.2, // how fast a pushed star slows
+		lensRadius: 0.09, // reach of the cursor's brightening
+		};
+	}
+
+	function startWater(canvas, overrides = {}) {
+		const S = Object.assign(waterDefaults(), overrides);
 		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		const gl = canvas.getContext('webgl2', {
 			alpha: false,
@@ -23,7 +52,7 @@
 		});
 		// The height field lives in half-float textures, so the surface stays continuous:
 		// an 8-bit field quantises the slope into steps that render as hard bands.
-		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return;
+		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return S;
 
 		const word = 'WHOLISTIC';
 
@@ -43,6 +72,7 @@
 			uniform vec2 uWindow;
 			uniform float uTime;
 			uniform float uAspect;
+			uniform float uSwell;
 			vec2 waveSlope(vec2 panel, float fieldGain) {
 				vec2 uv = uWindow.x + panel * uWindow.y;
 				// Taps one and a half cells out, so the bilinear filter smooths the slope
@@ -60,12 +90,12 @@
 				vec2 k3 = vec2(26.0, -15.0);
 				vec2 k4 = vec2(7.0, -23.0);
 				vec2 k5 = vec2(-31.0, -6.0);
-				grad += k1 * 0.0060 * cos(dot(k1, p) + t * 0.42);
-				grad += k2 * 0.0050 * cos(dot(k2, p) - t * 0.31);
-				grad += k3 * 0.0026 * cos(dot(k3, p) + t * 0.57);
-				grad += k4 * 0.0030 * cos(dot(k4, p) - t * 0.23);
-				grad += k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
-				return grad;
+				vec2 swell = k1 * 0.0060 * cos(dot(k1, p) + t * 0.42)
+					+ k2 * 0.0050 * cos(dot(k2, p) - t * 0.31)
+					+ k3 * 0.0026 * cos(dot(k3, p) + t * 0.57)
+					+ k4 * 0.0030 * cos(dot(k4, p) - t * 0.23)
+					+ k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
+				return grad + swell * uSwell;
 			}
 			// The panel melts into the page on the text side, and softly on the others.
 			float panelFade(vec2 panel) {
@@ -87,6 +117,10 @@
 			uniform sampler2D uField;
 			uniform vec2 uTexel;
 			uniform vec4 uDrop;
+			uniform float uSpeed;
+			uniform float uDamping;
+			uniform float uViscosity;
+			uniform float uOscillation;
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
@@ -99,15 +133,15 @@
 				// The outer fifth of the sheet, all of it out of view, soaks up the waves.
 				vec2 edge = min(vUv, 1.0 - vUv);
 				float sponge = 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.2, min(edge.x, edge.y)));
-				float h = (2.0 * c.r - c.g + 0.24 * lap) * 0.997 * sponge;
-				// A little viscosity rounds the crests off, so rings fade to a soft swell.
-				h = mix(h, (l + r + d + u) * 0.25, 0.006);
+				float h = (2.0 * c.r - c.g + uSpeed * lap) * uDamping * sponge;
+				// Viscosity rounds the crests off, so rings fade to a soft swell.
+				h = mix(h, (l + r + d + u) * 0.25, uViscosity);
 				if (uDrop.w > 0.0) {
-					// A drop is a short wave train, three crests deep, so it spreads as a
-					// set of rings rather than one front.
+					// A drop is a short wave train, so it spreads as a set of rings rather
+					// than one front.
 					float dist = length((vUv - uDrop.xy) / uTexel) / uDrop.z;
 					float window1 = 1.0 - smoothstep(0.0, 1.0, dist);
-					h += uDrop.w * window1 * window1 * cos(dist * 6.5);
+					h += uDrop.w * window1 * window1 * cos(dist * uOscillation);
 				}
 				o = vec4(h, c.r, 0.0, 1.0);
 			}`;
@@ -117,10 +151,12 @@
 		const sheenFs = `#version 300 es
 			precision highp float;
 			${slopeGlsl}
+			uniform float uShading;
+			uniform float uShine;
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
-				vec2 grad = waveSlope(vUv, 2.8);
+				vec2 grad = waveSlope(vUv, uShading);
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
 				vec3 half1 = normalize(light + view);
@@ -137,7 +173,8 @@
 				vec3 tint = mix(cool, warm, smoothstep(-0.2, 0.2, side));
 				vec3 glint = mix(vec3(0.64, 0.67, 0.69), tint, 0.7);
 				vec3 deep = vec3(0.043, 0.047, 0.047);
-				o = vec4(deep + glint * (spec * 0.24 + sky * 0.07 + rim * 0.12) * panelFade(vUv), 1.0);
+				float lit = spec * uShine + (sky * 0.07 + rim * 0.12) * (uShine / 0.24);
+				o = vec4(deep + glint * lit * panelFade(vUv), 1.0);
 			}`;
 
 		// The stars: points that spell the word, plus a scatter of fainter ones. Each
@@ -151,6 +188,11 @@
 			${slopeGlsl}
 			uniform float uRatio;
 			uniform vec2 uPointer;
+			uniform float uStarBrightness;
+			uniform float uStarSize;
+			uniform float uGlint;
+			uniform float uTwinkle;
+			uniform float uLensRadius;
 			out float vBright;
 			out vec3 vColor;
 			void main() {
@@ -159,11 +201,11 @@
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.12, 0.2, 0.97));
 				vec3 half1 = normalize(light + view);
-				float glint = pow(max(dot(n, half1), 0.0), 80.0);
-				float wake = smoothstep(0.04, 0.35, length(grad));
-				float twinkle = 0.72 + 0.28 * sin(uTime * aSeed.z + aSeed.y);
-				float lens = 1.0 - smoothstep(0.0, 0.09, length((aPanel - uPointer) * vec2(uAspect, 1.0)));
-				float base = mix(0.05, 0.42, aKind);
+				float glint = pow(max(dot(n, half1), 0.0), 80.0) * uGlint;
+				float wake = smoothstep(0.04, 0.35, length(grad)) * uGlint;
+				float twinkle = 1.0 - uTwinkle + uTwinkle * sin(uTime * aSeed.z + aSeed.y);
+				float lens = 1.0 - smoothstep(0.0, max(uLensRadius, 0.001), length((aPanel - uPointer) * vec2(uAspect, 1.0)));
+				float base = mix(0.05, uStarBrightness, aKind);
 				float fade = mix(panelFade(aPanel), 0.85 + 0.15 * panelFade(aPanel), aKind);
 				float bright = (base + glint * (0.6 + 1.0 * wake) + 0.2 * wake * wake) * twinkle * fade;
 				bright *= 1.0 + lens * 0.5;
@@ -175,7 +217,7 @@
 					: pick < 0.64 ? vec3(0.973, 0.475, 0.082)
 					: pick < 0.74 ? vec3(0.980, 0.600, 0.298)
 					: vec3(0.961, 0.965, 0.984);
-				float size = (mix(2.5, 3.2, aKind) + (8.0 * glint + 4.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
+				float size = (mix(2.5, uStarSize, aKind) + (8.0 * glint + 4.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
 				gl_PointSize = max(size, 3.0);
 				gl_Position = vec4(aPanel * 2.0 - 1.0, 0.0, 1.0);
 			}`;
@@ -227,13 +269,13 @@
 			stars = program(starVs, starFs);
 		} catch (error) {
 			console.error('water shader', error);
-			return;
+			return S;
 		}
 		const locate = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
-		const simLoc = locate(sim, ['uField', 'uTexel', 'uDrop']);
-		const slopeNames = ['uField', 'uTexel', 'uWindow', 'uTime', 'uAspect'];
-		const sheenLoc = locate(sheen, slopeNames);
-		const starLoc = locate(stars, [...slopeNames, 'uRatio', 'uPointer']);
+		const simLoc = locate(sim, ['uField', 'uTexel', 'uDrop', 'uSpeed', 'uDamping', 'uViscosity', 'uOscillation']);
+		const slopeNames = ['uField', 'uTexel', 'uWindow', 'uTime', 'uAspect', 'uSwell'];
+		const sheenLoc = locate(sheen, [...slopeNames, 'uShading', 'uShine']);
+		const starLoc = locate(stars, [...slopeNames, 'uRatio', 'uPointer', 'uStarBrightness', 'uStarSize', 'uGlint', 'uTwinkle', 'uLensRadius']);
 
 		// One triangle that covers the screen, for the simulation and the sheen.
 		const screenVao = gl.createVertexArray();
@@ -331,14 +373,15 @@
 		// The cursor pushes stars the way Astra's does: an impulse along the pointer's
 		// motion for stars near the segment it just crossed, then the stars coast,
 		// and a spring brings each back to its home so the word mends itself.
-		const pointer = { x: -10, y: -10, px: -10, py: -10, vx: 0, vy: 0, inside: false };
+		const pointer = { x: -10, y: -10, px: -10, py: -10, inside: false };
 		function moveStars(dt, aspect) {
 			const seg = [pointer.x - pointer.px, pointer.y - pointer.py];
 			const segLen2 = (seg[0] * aspect) ** 2 + seg[1] ** 2;
-			const radius = 0.06;
-			const push = pointer.inside && segLen2 > 0;
-			const spring = 9;
-			const drag = Math.exp(-dt * 3.2);
+			const radius = S.pushRadius;
+			const push = pointer.inside && segLen2 > 0 && radius > 0;
+			const spring = S.spring;
+			const drag = Math.exp(-dt * S.coast);
+			const strength = S.pushStrength;
 			for (let i = 0; i < starCount; i++) {
 				const ix = i * 2;
 				const iy = ix + 1;
@@ -356,8 +399,8 @@
 					if (dist < radius) {
 						const weight = (1 - dist / radius) ** 2;
 						const mass = 0.7 + seed4(i) * 0.9;
-						vx += (seg[0] * 2.2 + dx / aspect * 0.9) * weight / mass;
-						vy += (seg[1] * 2.2 + dy * 0.9) * weight / mass;
+						vx += (seg[0] * strength + dx / aspect * strength * 0.4) * weight / mass;
+						vy += (seg[1] * strength + dy * strength * 0.4) * weight / mass;
 					}
 				}
 				const ox = offset[ix];
@@ -407,12 +450,11 @@
 			return { texture, framebuffer };
 		}
 		let ratio = 1;
-		// A drop's radius in field cells, set from the panel width so a ring is the same
-		// fraction of the panel at any size.
-		let dropRadius = 12;
+		let panelWidth = 1;
 		function resize() {
 			const rect = canvas.getBoundingClientRect();
 			ratio = Math.min(window.devicePixelRatio || 1, 3);
+			panelWidth = rect.width;
 			const width = Math.max(1, Math.round(rect.width * ratio));
 			const height = Math.max(1, Math.round(rect.height * ratio));
 			if (canvas.width !== width || canvas.height !== height) {
@@ -430,14 +472,19 @@
 				}
 				fields.push(makeField(), makeField());
 				makeStars(rect.width, rect.height);
-				dropRadius = Math.max(6, rect.width * 0.8 * 0.04);
 			}
+		}
+		// A drop's radius in field cells, from the panel width, so a ring is the same
+		// fraction of the panel at any size.
+		function dropRadius() {
+			return Math.max(6, panelWidth * 0.8 * S.dropSize);
 		}
 
 		// Drops queue up and enter the field one per simulation step. Positions are in
 		// panel coordinates and map into the middle of the sheet.
 		const drops = [];
 		function drop(u, v, radius, mag) {
+			if (!S.ripples || mag <= 0) return;
 			drops.push([windowOffset + u * windowScale, windowOffset + v * windowScale, radius, mag]);
 		}
 		function panelPoint(event) {
@@ -452,7 +499,7 @@
 		}
 		let last = null;
 		canvas.addEventListener('pointerdown', (event) => {
-			place(event, 0.5, dropRadius);
+			place(event, S.dropStrength, dropRadius());
 			last = [event.clientX, event.clientY];
 		});
 		canvas.addEventListener('pointermove', (event) => {
@@ -473,7 +520,7 @@
 			const moved = Math.hypot(event.clientX - last[0], event.clientY - last[1]);
 			if (moved < 3) return;
 			last = [event.clientX, event.clientY];
-			place(event, Math.min(0.2, moved * 0.02), dropRadius * 0.6);
+			place(event, Math.min(S.dragStrength, moved * S.dragStrength * 0.1), dropRadius() * 0.6);
 		});
 		canvas.addEventListener('pointerleave', () => {
 			last = null;
@@ -490,8 +537,8 @@
 		let nextRain = 800;
 		function rain(elapsed) {
 			if (elapsed < nextRain) return;
-			nextRain = elapsed + 1800 + Math.random() * 2200;
-			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, dropRadius, 0.3 + Math.random() * 0.2);
+			nextRain = elapsed + S.rainEvery * 1000 * (0.6 + Math.random() * 0.8);
+			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, dropRadius(), S.dropStrength * (0.6 + Math.random() * 0.4));
 		}
 
 		function step() {
@@ -504,6 +551,10 @@
 			gl.bindTexture(gl.TEXTURE_2D, from.texture);
 			gl.uniform1i(simLoc.uField, 0);
 			gl.uniform2f(simLoc.uTexel, 1 / cols, 1 / rows);
+			gl.uniform1f(simLoc.uSpeed, Math.min(0.5, Math.max(0, S.speed)));
+			gl.uniform1f(simLoc.uDamping, Math.min(1, Math.max(0, S.damping)));
+			gl.uniform1f(simLoc.uViscosity, Math.min(0.5, Math.max(0, S.viscosity)));
+			gl.uniform1f(simLoc.uOscillation, S.oscillation);
 			const next = drops.shift();
 			if (next) gl.uniform4f(simLoc.uDrop, next[0], next[1], next[2], next[3]);
 			else gl.uniform4f(simLoc.uDrop, 0, 0, 1, 0);
@@ -519,6 +570,7 @@
 			gl.uniform2f(loc.uWindow, windowOffset, windowScale);
 			gl.uniform1f(loc.uTime, seconds);
 			gl.uniform1f(loc.uAspect, canvas.width / canvas.height);
+			gl.uniform1f(loc.uSwell, S.swell);
 		}
 
 		// The wave advances 120 steps a second whatever the display's refresh rate.
@@ -550,6 +602,8 @@
 			gl.useProgram(sheen);
 			gl.bindVertexArray(screenVao);
 			setSlopeUniforms(sheenLoc, elapsed / 1000);
+			gl.uniform1f(sheenLoc.uShading, S.shading);
+			gl.uniform1f(sheenLoc.uShine, S.shine);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 
 			gl.enable(gl.BLEND);
@@ -559,11 +613,17 @@
 			setSlopeUniforms(starLoc, elapsed / 1000);
 			gl.uniform1f(starLoc.uRatio, ratio);
 			gl.uniform2f(starLoc.uPointer, pointer.x, pointer.y);
+			gl.uniform1f(starLoc.uStarBrightness, S.starBrightness);
+			gl.uniform1f(starLoc.uStarSize, S.starSize);
+			gl.uniform1f(starLoc.uGlint, S.glint);
+			gl.uniform1f(starLoc.uTwinkle, S.twinkle);
+			gl.uniform1f(starLoc.uLensRadius, S.lensRadius);
 			gl.drawArrays(gl.POINTS, 0, starCount);
 			gl.bindVertexArray(null);
 			gl.disable(gl.BLEND);
 		}
 		requestAnimationFrame(frame);
+		return S;
 	}
 	// WATER-END
 </script>
