@@ -25,6 +25,8 @@
 		// an 8-bit field quantises the slope into steps that render as hard bands.
 		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return;
 
+		const word = 'WHOLISTIC';
+
 		// The simulated sheet is wider than the visible panel by this fraction on every
 		// side, so rings run out of view and die in the border instead of reflecting.
 		const pad = 0.35;
@@ -32,7 +34,7 @@
 		const windowOffset = pad / span;
 		const windowScale = 1 / span;
 
-		// Shared by the sheen and the glitter: the wave slope at a point of the panel,
+		// Shared by the sheen and the stars: the wave slope at a point of the panel,
 		// from the simulated field plus a slow analytic swell of five travelling waves
 		// whose directions and speeds share no ratio, so they do not tile into a lattice.
 		const slopeGlsl = `
@@ -65,7 +67,7 @@
 				grad += k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
 				return grad;
 			}
-			// The panel melts into the page on every side, widest on the text side.
+			// The panel melts into the page on the text side, and softly on the others.
 			float panelFade(vec2 panel) {
 				return smoothstep(0.0, 0.28, panel.x) * smoothstep(1.0, 0.9, panel.x)
 					* smoothstep(0.0, 0.3, panel.y) * smoothstep(1.0, 0.7, panel.y);
@@ -101,21 +103,24 @@
 				// A little viscosity rounds the crests off, so rings fade to a soft swell.
 				h = mix(h, (l + r + d + u) * 0.25, 0.006);
 				if (uDrop.w > 0.0) {
+					// A drop is a short wave train, three crests deep, so it spreads as a
+					// set of rings rather than one front.
 					float dist = length((vUv - uDrop.xy) / uTexel) / uDrop.z;
-					h += uDrop.w * (0.5 + 0.5 * cos(3.14159 * min(dist, 1.0)));
+					float window1 = 1.0 - smoothstep(0.0, 1.0, dist);
+					h += uDrop.w * window1 * window1 * cos(dist * 6.5);
 				}
 				o = vec4(h, c.r, 0.0, 1.0);
 			}`;
 
 		// The sheen: continuous shading of the surface from its normal, so rings read
-		// as water under the glitter.
+		// as water under the stars.
 		const sheenFs = `#version 300 es
 			precision highp float;
 			${slopeGlsl}
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
-				vec2 grad = waveSlope(vUv, 5.0);
+				vec2 grad = waveSlope(vUv, 4.0);
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
 				vec3 half1 = normalize(light + view);
@@ -135,14 +140,14 @@
 				o = vec4(deep + glint * (spec * 0.34 + sky * 0.1 + rim * 0.2) * panelFade(vUv), 1.0);
 			}`;
 
-		// The glitter: thousands of facets scattered on the surface. Each lights up when
-		// the wave slope under it, plus its own fixed tilt, turns it toward the light, so
-		// every passing ring switches facets on and off as it goes.
-		const glitterVs = `#version 300 es
+		// The stars: points that spell the word, plus a scatter of fainter ones. Each
+		// brightens further when the wave slope under it turns it toward the light.
+		const starVs = `#version 300 es
 			precision highp float;
 			layout(location = 0) in vec2 aPanel;
 			layout(location = 1) in vec2 aFacet;
 			layout(location = 2) in vec4 aSeed;
+			layout(location = 3) in float aKind;
 			${slopeGlsl}
 			uniform float uRatio;
 			uniform vec2 uPointer;
@@ -158,8 +163,9 @@
 				float wake = smoothstep(0.04, 0.35, length(grad));
 				float twinkle = 0.72 + 0.28 * sin(uTime * aSeed.z + aSeed.y);
 				float lens = 1.0 - smoothstep(0.0, 0.16, length((aPanel - uPointer) * vec2(uAspect, 1.0)));
-				// A passing ring lights the facets along its crest into a bright ring.
-				float bright = (glint * (0.6 + 1.0 * wake) + 0.2 * wake * wake) * twinkle * panelFade(aPanel);
+				float base = mix(0.05, 0.42, aKind);
+				float fade = mix(panelFade(aPanel), 0.85 + 0.15 * panelFade(aPanel), aKind);
+				float bright = (base + glint * (0.6 + 1.0 * wake) + 0.2 * wake * wake) * twinkle * fade;
 				bright *= 1.0 + lens * 0.9;
 				vBright = bright;
 				// The Astra palette: two blues, two oranges, white, in its proportions.
@@ -169,11 +175,11 @@
 					: pick < 0.64 ? vec3(0.973, 0.475, 0.082)
 					: pick < 0.74 ? vec3(0.980, 0.600, 0.298)
 					: vec3(0.961, 0.965, 0.984);
-				float size = (3.0 + (9.0 * glint + 4.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
+				float size = (mix(2.5, 3.2, aKind) + (8.0 * glint + 4.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
 				gl_PointSize = max(size, 3.0);
 				gl_Position = vec4(aPanel * 2.0 - 1.0, 0.0, 1.0);
 			}`;
-		const glitterFs = `#version 300 es
+		const starFs = `#version 300 es
 			precision highp float;
 			in float vBright;
 			in vec3 vColor;
@@ -183,7 +189,7 @@
 				float dist = length(point);
 				float disc = 1.0 - smoothstep(0.08, 1.0, dist);
 				float core = pow(disc, 2.2);
-				// The brightest facets grow a four-ray flare.
+				// The brightest stars grow a four-ray flare.
 				float rayX = exp(-abs(point.y) * 28.0) * (1.0 - smoothstep(0.18, 1.0, abs(point.x)));
 				float rayY = exp(-abs(point.x) * 28.0) * (1.0 - smoothstep(0.18, 1.0, abs(point.y)));
 				float rays = max(rayX, rayY) * 0.28 * smoothstep(0.5, 1.2, vBright);
@@ -214,11 +220,11 @@
 		}
 		let sim;
 		let sheen;
-		let glitter;
+		let stars;
 		try {
 			sim = program(screenVs, simFs);
 			sheen = program(screenVs, sheenFs);
-			glitter = program(glitterVs, glitterFs);
+			stars = program(starVs, starFs);
 		} catch (error) {
 			console.error('water shader', error);
 			return;
@@ -227,7 +233,7 @@
 		const simLoc = locate(sim, ['uField', 'uTexel', 'uDrop']);
 		const slopeNames = ['uField', 'uTexel', 'uWindow', 'uTime', 'uAspect'];
 		const sheenLoc = locate(sheen, slopeNames);
-		const glitterLoc = locate(glitter, [...slopeNames, 'uRatio', 'uPointer']);
+		const starLoc = locate(stars, [...slopeNames, 'uRatio', 'uPointer']);
 
 		// One triangle that covers the screen, for the simulation and the sheen.
 		const screenVao = gl.createVertexArray();
@@ -237,25 +243,70 @@
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 		gl.enableVertexAttribArray(0);
 		gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+		gl.bindVertexArray(null);
 
-		// The facets: a jittered grid over the panel, one facet per 14 by 14 CSS pixels,
-		// each with a fixed random tilt, a colour pick, a twinkle phase and rate, and a
-		// size. The grid is rebuilt when the panel changes size.
-		const glitterVao = gl.createVertexArray();
-		const glitterBuffers = [gl.createBuffer(), gl.createBuffer(), gl.createBuffer()];
-		let facetCount = 0;
-		function makeFacets(widthPx, heightPx) {
-			const facetCols = Math.max(8, Math.round(widthPx / 14));
-			const facetRows = Math.max(8, Math.round(heightPx / 14));
-			facetCount = facetCols * facetRows;
-			const panel = new Float32Array(facetCount * 2);
-			const facet = new Float32Array(facetCount * 2);
-			const seed = new Float32Array(facetCount * 4);
-			for (let i = 0; i < facetCount; i++) {
-				const col = i % facetCols;
-				const row = Math.floor(i / facetCols);
-				panel[i * 2] = (col + Math.random()) / facetCols;
-				panel[i * 2 + 1] = (row + Math.random()) / facetRows;
+		// Where the word's stars sit: points sampled from the glyphs drawn on a 2D canvas,
+		// in panel coordinates with y up.
+		function sampleWord(count, aspect) {
+			const width = 640;
+			const height = Math.max(64, Math.round(width / aspect));
+			const sheet = document.createElement('canvas');
+			sheet.width = width;
+			sheet.height = height;
+			const ctx = sheet.getContext('2d');
+			if (!ctx) return [];
+			const family = 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+			ctx.font = `600 100px ${family}`;
+			const measured = ctx.measureText(word).width;
+			const size = Math.min(100 * (width * 0.84) / measured, height * 0.5);
+			ctx.font = `600 ${size}px ${family}`;
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillStyle = '#fff';
+			ctx.fillText(word, width / 2, height * 0.5);
+			const data = ctx.getImageData(0, 0, width, height).data;
+			const inside = [];
+			for (let y = 0; y < height; y++) {
+				for (let x = 0; x < width; x++) {
+					if (data[(y * width + x) * 4 + 3] > 128) inside.push(x, y);
+				}
+			}
+			const points = [];
+			if (inside.length === 0) return points;
+			for (let i = 0; i < count; i++) {
+				const pick = Math.floor(Math.random() * (inside.length / 2)) * 2;
+				points.push((inside[pick] + Math.random()) / width, 1 - (inside[pick + 1] + Math.random()) / height);
+			}
+			return points;
+		}
+
+		// The stars: the word's points plus a scatter of background ones. Each has a home
+		// in the panel, an offset and a velocity for the cursor to push, a fixed facet
+		// tilt, a colour pick, a twinkle phase and rate, and a size.
+		const starVao = gl.createVertexArray();
+		const starBuffers = [gl.createBuffer(), gl.createBuffer(), gl.createBuffer(), gl.createBuffer()];
+		let starCount = 0;
+		let home = new Float32Array(0);
+		let position = new Float32Array(0);
+		let offset = new Float32Array(0);
+		let velocity = new Float32Array(0);
+		function makeStars(widthPx, heightPx) {
+			const wordCount = Math.round(Math.min(3200, Math.max(1200, widthPx * 4)));
+			const scatterCount = Math.round(widthPx * heightPx / 320);
+			const wordPoints = sampleWord(wordCount, widthPx / heightPx);
+			starCount = wordPoints.length / 2 + scatterCount;
+			home = new Float32Array(starCount * 2);
+			position = new Float32Array(starCount * 2);
+			offset = new Float32Array(starCount * 2);
+			velocity = new Float32Array(starCount * 2);
+			const facet = new Float32Array(starCount * 2);
+			const seed = new Float32Array(starCount * 4);
+			const kind = new Float32Array(starCount);
+			for (let i = 0; i < starCount; i++) {
+				const inWord = i < wordPoints.length / 2;
+				home[i * 2] = inWord ? wordPoints[i * 2] : Math.random();
+				home[i * 2 + 1] = inWord ? wordPoints[i * 2 + 1] : Math.random();
+				kind[i] = inWord ? 1 : 0;
 				const angle = Math.random() * Math.PI * 2;
 				const tilt = Math.sqrt(Math.random()) * 0.42;
 				facet[i * 2] = Math.cos(angle) * tilt;
@@ -265,14 +316,75 @@
 				seed[i * 4 + 2] = 1.5 + Math.random() * 3.5;
 				seed[i * 4 + 3] = 0.5 + Math.random() * Math.random() * 1.5;
 			}
-			gl.bindVertexArray(glitterVao);
-			for (const [index, data, size] of [[0, panel, 2], [1, facet, 2], [2, seed, 4]]) {
-				gl.bindBuffer(gl.ARRAY_BUFFER, glitterBuffers[index]);
-				gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+			position.set(home);
+			gl.bindVertexArray(starVao);
+			const layout = [[0, position, 2, gl.DYNAMIC_DRAW], [1, facet, 2, gl.STATIC_DRAW], [2, seed, 4, gl.STATIC_DRAW], [3, kind, 1, gl.STATIC_DRAW]];
+			for (const [index, data, size, usage] of layout) {
+				gl.bindBuffer(gl.ARRAY_BUFFER, starBuffers[index]);
+				gl.bufferData(gl.ARRAY_BUFFER, data, usage);
 				gl.enableVertexAttribArray(index);
 				gl.vertexAttribPointer(index, size, gl.FLOAT, false, 0, 0);
 			}
 			gl.bindVertexArray(null);
+		}
+
+		// The cursor pushes stars the way Astra's does: an impulse along the pointer's
+		// motion for stars near the segment it just crossed, then the stars coast,
+		// and a spring brings each back to its home so the word mends itself.
+		const pointer = { x: -10, y: -10, px: -10, py: -10, vx: 0, vy: 0, inside: false };
+		function moveStars(dt, aspect) {
+			const seg = [pointer.x - pointer.px, pointer.y - pointer.py];
+			const segLen2 = (seg[0] * aspect) ** 2 + seg[1] ** 2;
+			const radius = 0.11;
+			const push = pointer.inside && segLen2 > 0;
+			const spring = 9;
+			const drag = Math.exp(-dt * 3.2);
+			for (let i = 0; i < starCount; i++) {
+				const ix = i * 2;
+				const iy = ix + 1;
+				let vx = velocity[ix];
+				let vy = velocity[iy];
+				if (push) {
+					// Distance from the star to the pointer's segment, in a frame where a
+					// unit is the panel height, so pushes are round on screen.
+					const rx = (position[ix] - pointer.px) * aspect;
+					const ry = position[iy] - pointer.py;
+					const t = Math.max(0, Math.min(1, (rx * seg[0] * aspect + ry * seg[1]) / segLen2));
+					const dx = rx - seg[0] * aspect * t;
+					const dy = ry - seg[1] * t;
+					const dist = Math.hypot(dx, dy);
+					if (dist < radius) {
+						const weight = (1 - dist / radius) ** 2;
+						const mass = 0.7 + seed4(i) * 0.9;
+						vx += (seg[0] * 4.5 + dx / aspect * 1.6) * weight / mass;
+						vy += (seg[1] * 4.5 + dy * 1.6) * weight / mass;
+					}
+				}
+				const ox = offset[ix];
+				const oy = offset[iy];
+				vx = (vx - ox * spring * dt) * drag;
+				vy = (vy - oy * spring * dt) * drag;
+				const speed = Math.hypot(vx * aspect, vy);
+				if (speed > 0.9) {
+					vx *= 0.9 / speed;
+					vy *= 0.9 / speed;
+				}
+				velocity[ix] = vx;
+				velocity[iy] = vy;
+				offset[ix] = ox + vx * dt;
+				offset[iy] = oy + vy * dt;
+				position[ix] = home[ix] + offset[ix];
+				position[iy] = home[iy] + offset[iy];
+			}
+			pointer.px = pointer.x;
+			pointer.py = pointer.y;
+			gl.bindBuffer(gl.ARRAY_BUFFER, starBuffers[0]);
+			gl.bufferSubData(gl.ARRAY_BUFFER, 0, position);
+		}
+		// A cheap per-star constant in [0, 1), from the star's index.
+		function seed4(i) {
+			const x = Math.sin(i * 12.9898) * 43758.5453;
+			return x - Math.floor(x);
 		}
 
 		// Two half-float fields, swapped every step.
@@ -317,8 +429,8 @@
 					gl.deleteFramebuffer(field.framebuffer);
 				}
 				fields.push(makeField(), makeField());
-				makeFacets(rect.width, rect.height);
-				dropRadius = Math.max(6, rect.width * 0.8 * 0.045);
+				makeStars(rect.width, rect.height);
+				dropRadius = Math.max(6, rect.width * 0.8 * 0.04);
 			}
 		}
 
@@ -328,7 +440,6 @@
 		function drop(u, v, radius, mag) {
 			drops.push([windowOffset + u * windowScale, windowOffset + v * windowScale, radius, mag]);
 		}
-		const pointer = [-10, -10];
 		function panelPoint(event) {
 			const rect = canvas.getBoundingClientRect();
 			if (rect.width === 0 || rect.height === 0) return null;
@@ -347,8 +458,13 @@
 		canvas.addEventListener('pointermove', (event) => {
 			const at = panelPoint(event);
 			if (at) {
-				pointer[0] = at[0];
-				pointer[1] = at[1];
+				if (!pointer.inside) {
+					pointer.px = at[0];
+					pointer.py = at[1];
+				}
+				pointer.x = at[0];
+				pointer.y = at[1];
+				pointer.inside = true;
 			}
 			if (!last) {
 				last = [event.clientX, event.clientY];
@@ -361,8 +477,11 @@
 		});
 		canvas.addEventListener('pointerleave', () => {
 			last = null;
-			pointer[0] = -10;
-			pointer[1] = -10;
+			pointer.inside = false;
+			pointer.x = -10;
+			pointer.y = -10;
+			pointer.px = -10;
+			pointer.py = -10;
 		});
 
 		// A random drop every few seconds keeps rings crossing the surface when nobody is
@@ -371,7 +490,7 @@
 		let nextRain = 800;
 		function rain(elapsed) {
 			if (elapsed < nextRain) return;
-			nextRain = elapsed + 1200 + Math.random() * 1800;
+			nextRain = elapsed + 1800 + Math.random() * 2200;
 			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, dropRadius, 0.45 + Math.random() * 0.35);
 		}
 
@@ -406,19 +525,28 @@
 		const stepMs = 1000 / 120;
 		const started = performance.now();
 		let stepped = 0;
+		let lastFrame = started;
 		function frame(now) {
 			requestAnimationFrame(frame);
 			if (document.hidden) return;
 			resize();
 			const elapsed = now - started;
+			const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+			lastFrame = now;
 			rain(elapsed);
+
+			// The simulation writes whole values: blending must be off here, or each
+			// step adds onto the last and the field runs away within a second.
+			gl.disable(gl.BLEND);
 			const due = Math.min(4, Math.floor(elapsed / stepMs) - stepped);
 			for (let i = 0; i < due; i++) step();
 			stepped = Math.floor(elapsed / stepMs);
 
+			const aspect = canvas.width / canvas.height;
+			moveStars(dt, aspect);
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			gl.viewport(0, 0, canvas.width, canvas.height);
-			gl.disable(gl.BLEND);
 			gl.useProgram(sheen);
 			gl.bindVertexArray(screenVao);
 			setSlopeUniforms(sheenLoc, elapsed / 1000);
@@ -426,13 +554,14 @@
 
 			gl.enable(gl.BLEND);
 			gl.blendFunc(gl.ONE, gl.ONE);
-			gl.useProgram(glitter);
-			gl.bindVertexArray(glitterVao);
-			setSlopeUniforms(glitterLoc, elapsed / 1000);
-			gl.uniform1f(glitterLoc.uRatio, ratio);
-			gl.uniform2f(glitterLoc.uPointer, pointer[0], pointer[1]);
-			gl.drawArrays(gl.POINTS, 0, facetCount);
+			gl.useProgram(stars);
+			gl.bindVertexArray(starVao);
+			setSlopeUniforms(starLoc, elapsed / 1000);
+			gl.uniform1f(starLoc.uRatio, ratio);
+			gl.uniform2f(starLoc.uPointer, pointer.x, pointer.y);
+			gl.drawArrays(gl.POINTS, 0, starCount);
 			gl.bindVertexArray(null);
+			gl.disable(gl.BLEND);
 		}
 		requestAnimationFrame(frame);
 	}
