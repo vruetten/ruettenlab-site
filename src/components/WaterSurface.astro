@@ -20,50 +20,134 @@
 			antialias: false,
 			powerPreference: 'low-power',
 		});
-		if (!gl || reduce) return;
+		// The height field lives in half-float textures, so the surface stays continuous:
+		// an 8-bit field quantises the slope into steps that render as hard bands.
+		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return;
 
 		const vs = `#version 300 es
 			in vec2 a;
 			out vec2 vUv;
 			void main() {
-				vUv = vec2(a.x * 0.5 + 0.5, 0.5 - a.y * 0.5);
+				vUv = a * 0.5 + 0.5;
 				gl_Position = vec4(a, 0.0, 1.0);
 			}`;
-		const fs = `#version 300 es
+
+		// One wave-equation step. r holds the height, g the height one step earlier.
+		const simFs = `#version 300 es
 			precision highp float;
-			uniform sampler2D uHeight;
+			uniform sampler2D uField;
 			uniform vec2 uTexel;
-			uniform float uTime;
+			uniform vec4 uDrop;
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
-				vec2 off = uTexel * 5.0;
-				float h = texture(uHeight, vUv).r - 0.502;
-				float hx = texture(uHeight, vUv + vec2(off.x, 0.0)).r - 0.502;
-				float hy = texture(uHeight, vUv + vec2(0.0, off.y)).r - 0.502;
-				float slope = length(vec2(h - hx, hy - h));
-				float wake = smoothstep(0.012, 0.05, slope);
-				float crest = pow(max(sin(vUv.x * 1.7 + vUv.y * 0.65 + uTime * 0.07), 0.0), 8.0);
-				float crest2 = pow(max(sin(vUv.x * -0.85 + vUv.y * 1.35 - uTime * 0.045), 0.0), 10.0);
-				float fade = smoothstep(0.0, 0.28, vUv.x)
-					* smoothstep(0.0, 0.18, vUv.y) * smoothstep(1.0, 0.82, vUv.y);
+				vec2 c = texture(uField, vUv).rg;
+				float l = texture(uField, vUv - vec2(uTexel.x, 0.0)).r;
+				float r = texture(uField, vUv + vec2(uTexel.x, 0.0)).r;
+				float d = texture(uField, vUv - vec2(0.0, uTexel.y)).r;
+				float u = texture(uField, vUv + vec2(0.0, uTexel.y)).r;
+				float lap = l + r + d + u - 4.0 * c.r;
+				// The border soaks up waves so rings do not bounce back across the surface.
+				vec2 edge = min(vUv, 1.0 - vUv);
+				float sponge = 1.0 - 0.08 * (1.0 - smoothstep(0.0, 0.12, min(edge.x, edge.y)));
+				float h = (2.0 * c.r - c.g + 0.24 * lap) * 0.994 * sponge;
+				// A little viscosity rounds the crests off, so rings fade to a soft swell.
+				h = mix(h, (l + r + d + u) * 0.25, 0.015);
+				if (uDrop.w > 0.0) {
+					float dist = length((vUv - uDrop.xy) / uTexel) / uDrop.z;
+					h += uDrop.w * (0.5 + 0.5 * cos(3.14159 * min(dist, 1.0)));
+				}
+				o = vec4(h, c.r, 0.0, 1.0);
+			}`;
+
+		// Shade the surface from its normal, so tone varies continuously with slope.
+		const drawFs = `#version 300 es
+			precision highp float;
+			uniform sampler2D uField;
+			uniform vec2 uTexel;
+			uniform float uTime;
+			uniform float uAspect;
+			in vec2 vUv;
+			out vec4 o;
+			void main() {
+				vec2 uv = vUv;
+				float l = texture(uField, uv - vec2(uTexel.x, 0.0)).r;
+				float r = texture(uField, uv + vec2(uTexel.x, 0.0)).r;
+				float d = texture(uField, uv - vec2(0.0, uTexel.y)).r;
+				float u = texture(uField, uv + vec2(0.0, uTexel.y)).r;
+				vec2 grad = vec2(r - l, u - d) * 8.0;
+
+				// A slow swell under the ripples, as five travelling waves.
+				vec2 p = vec2(uv.x * uAspect, uv.y);
+				float t = uTime;
+				// Five directions and speeds that share no ratio, so the interference does
+				// not tile into a lattice.
+				vec2 k1 = vec2(19.0, 8.0);
+				vec2 k2 = vec2(-10.0, 17.0);
+				vec2 k3 = vec2(26.0, -15.0);
+				vec2 k4 = vec2(7.0, -23.0);
+				vec2 k5 = vec2(-31.0, -6.0);
+				grad += k1 * 0.0060 * cos(dot(k1, p) + t * 0.42);
+				grad += k2 * 0.0050 * cos(dot(k2, p) - t * 0.31);
+				grad += k3 * 0.0026 * cos(dot(k3, p) + t * 0.57);
+				grad += k4 * 0.0030 * cos(dot(k4, p) - t * 0.23);
+				grad += k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
+
+				vec3 n = normalize(vec3(-grad, 1.0));
+				vec3 view = vec3(0.0, 0.0, 1.0);
+				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
+				vec3 half1 = normalize(light + view);
+				float spec = pow(max(dot(n, half1), 0.0), 24.0);
+				vec3 refl = reflect(-view, n);
+				// Zero on a flat surface, so still water stays as dark as the page.
+				float sky = max(smoothstep(-0.35, 0.45, refl.y * 0.7 - refl.x * 0.3) - 0.4375, 0.0);
+				float rim = pow(1.0 - max(dot(n, view), 0.0), 2.0);
+
+				float fade = smoothstep(0.0, 0.32, vUv.x) * smoothstep(1.0, 0.8, vUv.x)
+					* smoothstep(0.0, 0.16, vUv.y) * smoothstep(1.0, 0.84, vUv.y);
 				vec3 deep = vec3(0.043, 0.047, 0.047);
 				vec3 silver = vec3(0.62, 0.66, 0.68);
-				o = vec4(deep + silver * fade * (crest * 0.16 + crest2 * 0.09 + wake * 0.1), 1.0);
+				float light1 = spec * 0.34 + sky * 0.14 + rim * 0.18;
+				o = vec4(deep + silver * fade * light1, 1.0);
 			}`;
 
 		function compile(type, source) {
 			const shader = gl.createShader(type);
 			gl.shaderSource(shader, source);
 			gl.compileShader(shader);
+			if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+				throw new Error(gl.getShaderInfoLog(shader) || 'shader');
+			}
 			return shader;
 		}
-		const program = gl.createProgram();
-		gl.attachShader(program, compile(gl.VERTEX_SHADER, vs));
-		gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fs));
-		gl.bindAttribLocation(program, 0, 'a');
-		gl.linkProgram(program);
-		gl.useProgram(program);
+		function program(fragment) {
+			const p = gl.createProgram();
+			gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+			gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fragment));
+			gl.bindAttribLocation(p, 0, 'a');
+			gl.linkProgram(p);
+			return p;
+		}
+		let sim;
+		let draw;
+		try {
+			sim = program(simFs);
+			draw = program(drawFs);
+		} catch (error) {
+			console.error('water shader', error);
+			return;
+		}
+		const simLoc = {
+			field: gl.getUniformLocation(sim, 'uField'),
+			texel: gl.getUniformLocation(sim, 'uTexel'),
+			drop: gl.getUniformLocation(sim, 'uDrop'),
+		};
+		const drawLoc = {
+			field: gl.getUniformLocation(draw, 'uField'),
+			texel: gl.getUniformLocation(draw, 'uTexel'),
+			time: gl.getUniformLocation(draw, 'uTime'),
+			aspect: gl.getUniformLocation(draw, 'uAspect'),
+		};
 
 		const buffer = gl.createBuffer();
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -71,76 +155,25 @@
 		gl.enableVertexAttribArray(0);
 		gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-		const cols = 160;
-		const rows = 100;
-		let curr = new Float32Array(cols * rows);
-		let prev = new Float32Array(cols * rows);
-		let next = new Float32Array(cols * rows);
-		const bytes = new Uint8Array(cols * rows);
-
-		const texture = gl.createTexture();
-		gl.bindTexture(gl.TEXTURE_2D, texture);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, cols, rows, 0, gl.RED, gl.UNSIGNED_BYTE, null);
-		gl.uniform1i(gl.getUniformLocation(program, 'uHeight'), 0);
-		const texel = gl.getUniformLocation(program, 'uTexel');
-		const timeLoc = gl.getUniformLocation(program, 'uTime');
-		gl.uniform2f(texel, 1 / cols, 1 / rows);
-
-		function drop(u, v, mag) {
-			const x = Math.round(u * (cols - 1));
-			const y = Math.round(v * (rows - 1));
-			const radius = 12;
-			for (let dy = -radius; dy <= radius; dy++) {
-				for (let dx = -radius; dx <= radius; dx++) {
-					const px = x + dx;
-					const py = y + dy;
-					if (px <= 0 || py <= 0 || px >= cols - 1 || py >= rows - 1) continue;
-					const dist = Math.hypot(dx, dy);
-					if (dist > radius) continue;
-					curr[py * cols + px] += mag * (1 - dist / radius);
-				}
-			}
-		}
-
-		function step() {
-			const speed = 0.05;
-			const damp = 0.99;
-			for (let y = 1; y < rows - 1; y++) {
-				const row = y * cols;
-				for (let x = 1; x < cols - 1; x++) {
-					const i = row + x;
-					const lap = curr[i - 1] + curr[i + 1] + curr[i - cols] + curr[i + cols] - 4 * curr[i];
-					let value = 2 * curr[i] - prev[i] + speed * lap;
-					value *= damp;
-					if (value > 2) value = 2;
-					else if (value < -2) value = -2;
-					next[i] = value;
-				}
-			}
-			const swap = prev;
-			prev = curr;
-			curr = next;
-			next = swap;
-		}
-
-		function upload() {
-			for (let y = 1; y < rows - 1; y++) {
-				const row = y * cols;
-				for (let x = 1; x < cols - 1; x++) {
-					const i = row + x;
-					const value = (curr[i] * 2 + curr[i - 1] + curr[i + 1] + curr[i - cols] + curr[i + cols]) / 6;
-					const sample = 128 + value * 40;
-					bytes[i] = sample < 0 ? 0 : sample > 255 ? 255 : sample;
-				}
-			}
+		// Two half-float fields, swapped every step.
+		let cols = 0;
+		let rows = 0;
+		const fields = [];
+		function makeField() {
+			const texture = gl.createTexture();
 			gl.bindTexture(gl.TEXTURE_2D, texture);
-			gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RED, gl.UNSIGNED_BYTE, bytes);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, cols, rows, 0, gl.RGBA, gl.HALF_FLOAT, null);
+			const framebuffer = gl.createFramebuffer();
+			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+			gl.clearColor(0, 0, 0, 1);
+			gl.clear(gl.COLOR_BUFFER_BIT);
+			return { texture, framebuffer };
 		}
-
 		function resize() {
 			const rect = canvas.getBoundingClientRect();
 			const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -149,21 +182,33 @@
 			if (canvas.width !== width || canvas.height !== height) {
 				canvas.width = width;
 				canvas.height = height;
-				gl.viewport(0, 0, width, height);
+			}
+			const nextCols = Math.max(2, Math.round(rect.width * 0.6));
+			const nextRows = Math.max(2, Math.round(rect.height * 0.6));
+			if (nextCols !== cols || nextRows !== rows) {
+				cols = nextCols;
+				rows = nextRows;
+				for (const field of fields.splice(0)) {
+					gl.deleteTexture(field.texture);
+					gl.deleteFramebuffer(field.framebuffer);
+				}
+				fields.push(makeField(), makeField());
 			}
 		}
 
-		let last = null;
-		function place(event, mag) {
+		// Drops queue up and enter the field one per simulation step.
+		const drops = [];
+		function place(event, mag, radius) {
 			const rect = canvas.getBoundingClientRect();
 			if (rect.width === 0 || rect.height === 0) return;
 			const u = (event.clientX - rect.left) / rect.width;
-			const v = (event.clientY - rect.top) / rect.height;
+			const v = 1 - (event.clientY - rect.top) / rect.height;
 			if (u < 0 || v < 0 || u > 1 || v > 1) return;
-			drop(u, v, mag);
+			drops.push([u, v, radius, mag]);
 		}
+		let last = null;
 		canvas.addEventListener('pointerdown', (event) => {
-			place(event, 0.55);
+			place(event, 0.6, 7);
 			last = [event.clientX, event.clientY];
 		});
 		canvas.addEventListener('pointermove', (event) => {
@@ -171,25 +216,60 @@
 				last = [event.clientX, event.clientY];
 				return;
 			}
-			const speed = Math.hypot(event.clientX - last[0], event.clientY - last[1]);
+			const moved = Math.hypot(event.clientX - last[0], event.clientY - last[1]);
+			if (moved < 14) return;
 			last = [event.clientX, event.clientY];
-			if (speed < 3) return;
-			place(event, Math.min(0.7, speed * 0.02));
+			place(event, Math.min(0.3, moved * 0.01), 5);
 		});
 		canvas.addEventListener('pointerleave', () => {
 			last = null;
 		});
 
+		// A random drop every few seconds keeps rings crossing the surface when nobody is
+		// pointing at the water.
+		let nextRain = 800;
+		function rain(elapsed) {
+			if (elapsed < nextRain) return;
+			nextRain = elapsed + 2200 + Math.random() * 2600;
+			drops.push([0.25 + Math.random() * 0.7, 0.15 + Math.random() * 0.7, 5, 0.2 + Math.random() * 0.2]);
+		}
+
+		function step() {
+			const [from, to] = fields;
+			gl.useProgram(sim);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, to.framebuffer);
+			gl.viewport(0, 0, cols, rows);
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, from.texture);
+			gl.uniform1i(simLoc.field, 0);
+			gl.uniform2f(simLoc.texel, 1 / cols, 1 / rows);
+			const drop = drops.shift();
+			if (drop) gl.uniform4f(simLoc.drop, drop[0], drop[1], drop[2], drop[3]);
+			else gl.uniform4f(simLoc.drop, 0, 0, 1, 0);
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
+			fields.reverse();
+		}
+
 		const started = performance.now();
-		function draw(now) {
-			requestAnimationFrame(draw);
+		function frame(now) {
+			requestAnimationFrame(frame);
 			if (document.hidden) return;
 			resize();
+			const elapsed = now - started;
+			rain(elapsed);
 			step();
-			upload();
-			gl.uniform1f(timeLoc, (now - started) / 1000);
+			step();
+			gl.useProgram(draw);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			gl.viewport(0, 0, canvas.width, canvas.height);
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, fields[0].texture);
+			gl.uniform1i(drawLoc.field, 0);
+			gl.uniform2f(drawLoc.texel, 1 / cols, 1 / rows);
+			gl.uniform1f(drawLoc.time, elapsed / 1000);
+			gl.uniform1f(drawLoc.aspect, cols / rows);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 		}
-		requestAnimationFrame(draw);
+		requestAnimationFrame(frame);
 	}
 </script>
