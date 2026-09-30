@@ -27,7 +27,7 @@
 
 		// The simulated sheet is wider than the visible panel by this fraction on every
 		// side, so rings run out of view and die in the border instead of reflecting.
-		const pad = 0.5;
+		const pad = 0.35;
 		const span = 1 + 2 * pad;
 		const windowOffset = pad / span;
 		const windowScale = 1 / span;
@@ -41,13 +41,16 @@
 			uniform vec2 uWindow;
 			uniform float uTime;
 			uniform float uAspect;
-			vec2 waveSlope(vec2 panel) {
+			vec2 waveSlope(vec2 panel, float fieldGain) {
 				vec2 uv = uWindow.x + panel * uWindow.y;
-				float l = texture(uField, uv - vec2(uTexel.x, 0.0)).r;
-				float r = texture(uField, uv + vec2(uTexel.x, 0.0)).r;
-				float d = texture(uField, uv - vec2(0.0, uTexel.y)).r;
-				float u = texture(uField, uv + vec2(0.0, uTexel.y)).r;
-				vec2 grad = vec2(r - l, u - d) * 3.5;
+				// Taps one and a half cells out, so the bilinear filter smooths the slope
+				// and a ring's rim stays round instead of stepping along the cells.
+				vec2 o = uTexel * 1.5;
+				float l = texture(uField, uv - vec2(o.x, 0.0)).r;
+				float r = texture(uField, uv + vec2(o.x, 0.0)).r;
+				float d = texture(uField, uv - vec2(0.0, o.y)).r;
+				float u = texture(uField, uv + vec2(0.0, o.y)).r;
+				vec2 grad = vec2(r - l, u - d) * fieldGain;
 				vec2 p = vec2(panel.x * uAspect, panel.y);
 				float t = uTime;
 				vec2 k1 = vec2(19.0, 8.0);
@@ -64,7 +67,7 @@
 			}
 			// The panel melts into the page on every side, widest on the text side.
 			float panelFade(vec2 panel) {
-				return smoothstep(0.0, 0.28, panel.x) * smoothstep(1.0, 0.72, panel.x)
+				return smoothstep(0.0, 0.28, panel.x) * smoothstep(1.0, 0.9, panel.x)
 					* smoothstep(0.0, 0.3, panel.y) * smoothstep(1.0, 0.7, panel.y);
 			}`;
 
@@ -94,9 +97,9 @@
 				// The outer fifth of the sheet, all of it out of view, soaks up the waves.
 				vec2 edge = min(vUv, 1.0 - vUv);
 				float sponge = 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.2, min(edge.x, edge.y)));
-				float h = (2.0 * c.r - c.g + 0.24 * lap) * 0.995 * sponge;
+				float h = (2.0 * c.r - c.g + 0.24 * lap) * 0.997 * sponge;
 				// A little viscosity rounds the crests off, so rings fade to a soft swell.
-				h = mix(h, (l + r + d + u) * 0.25, 0.012);
+				h = mix(h, (l + r + d + u) * 0.25, 0.006);
 				if (uDrop.w > 0.0) {
 					float dist = length((vUv - uDrop.xy) / uTexel) / uDrop.z;
 					h += uDrop.w * (0.5 + 0.5 * cos(3.14159 * min(dist, 1.0)));
@@ -104,15 +107,15 @@
 				o = vec4(h, c.r, 0.0, 1.0);
 			}`;
 
-		// The sheen: a faint continuous shading of the surface from its normal, so the
-		// water has a body under the glitter.
+		// The sheen: continuous shading of the surface from its normal, so rings read
+		// as water under the glitter.
 		const sheenFs = `#version 300 es
 			precision highp float;
 			${slopeGlsl}
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
-				vec2 grad = waveSlope(vUv);
+				vec2 grad = waveSlope(vUv, 5.0);
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
 				vec3 half1 = normalize(light + view);
@@ -129,7 +132,7 @@
 				vec3 tint = mix(cool, warm, smoothstep(-0.2, 0.2, side));
 				vec3 glint = mix(vec3(0.64, 0.67, 0.69), tint, 0.7);
 				vec3 deep = vec3(0.043, 0.047, 0.047);
-				o = vec4(deep + glint * (spec * 0.16 + sky * 0.07 + rim * 0.08) * panelFade(vUv), 1.0);
+				o = vec4(deep + glint * (spec * 0.34 + sky * 0.1 + rim * 0.2) * panelFade(vUv), 1.0);
 			}`;
 
 		// The glitter: thousands of facets scattered on the surface. Each lights up when
@@ -146,7 +149,7 @@
 			out float vBright;
 			out vec3 vColor;
 			void main() {
-				vec2 grad = waveSlope(aPanel);
+				vec2 grad = waveSlope(aPanel, 2.5);
 				vec3 n = normalize(vec3(-(grad + aFacet), 1.0));
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.12, 0.2, 0.97));
@@ -156,7 +159,7 @@
 				float twinkle = 0.72 + 0.28 * sin(uTime * aSeed.z + aSeed.y);
 				float lens = 1.0 - smoothstep(0.0, 0.16, length((aPanel - uPointer) * vec2(uAspect, 1.0)));
 				// A passing ring lights the facets along its crest into a bright ring.
-				float bright = (glint * (1.2 + 1.2 * wake) + 0.4 * wake * wake) * twinkle * panelFade(aPanel);
+				float bright = (glint * (0.6 + 1.0 * wake) + 0.2 * wake * wake) * twinkle * panelFade(aPanel);
 				bright *= 1.0 + lens * 0.9;
 				vBright = bright;
 				// The Astra palette: two blues, two oranges, white, in its proportions.
@@ -166,8 +169,8 @@
 					: pick < 0.64 ? vec3(0.973, 0.475, 0.082)
 					: pick < 0.74 ? vec3(0.980, 0.600, 0.298)
 					: vec3(0.961, 0.965, 0.984);
-				float size = (2.0 + (8.0 * glint + 3.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
-				gl_PointSize = max(size, 2.0);
+				float size = (3.0 + (9.0 * glint + 4.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
+				gl_PointSize = max(size, 3.0);
 				gl_Position = vec4(aPanel * 2.0 - 1.0, 0.0, 1.0);
 			}`;
 		const glitterFs = `#version 300 es
@@ -235,38 +238,42 @@
 		gl.enableVertexAttribArray(0);
 		gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-		// The facets: a jittered grid over the panel, each with a fixed random tilt, a
-		// colour pick, a twinkle phase and rate, and a size.
-		const facetCols = 78;
-		const facetRows = 64;
-		const facetCount = facetCols * facetRows;
-		const panel = new Float32Array(facetCount * 2);
-		const facet = new Float32Array(facetCount * 2);
-		const seed = new Float32Array(facetCount * 4);
-		for (let i = 0; i < facetCount; i++) {
-			const col = i % facetCols;
-			const row = Math.floor(i / facetCols);
-			panel[i * 2] = (col + Math.random()) / facetCols;
-			panel[i * 2 + 1] = (row + Math.random()) / facetRows;
-			const angle = Math.random() * Math.PI * 2;
-			const tilt = Math.sqrt(Math.random()) * 0.42;
-			facet[i * 2] = Math.cos(angle) * tilt;
-			facet[i * 2 + 1] = Math.sin(angle) * tilt;
-			seed[i * 4] = Math.random();
-			seed[i * 4 + 1] = Math.random() * Math.PI * 2;
-			seed[i * 4 + 2] = 1.5 + Math.random() * 3.5;
-			seed[i * 4 + 3] = 0.5 + Math.random() * Math.random() * 1.5;
-		}
+		// The facets: a jittered grid over the panel, one facet per 14 by 14 CSS pixels,
+		// each with a fixed random tilt, a colour pick, a twinkle phase and rate, and a
+		// size. The grid is rebuilt when the panel changes size.
 		const glitterVao = gl.createVertexArray();
-		gl.bindVertexArray(glitterVao);
-		for (const [index, data, size] of [[0, panel, 2], [1, facet, 2], [2, seed, 4]]) {
-			const buffer = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-			gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-			gl.enableVertexAttribArray(index);
-			gl.vertexAttribPointer(index, size, gl.FLOAT, false, 0, 0);
+		const glitterBuffers = [gl.createBuffer(), gl.createBuffer(), gl.createBuffer()];
+		let facetCount = 0;
+		function makeFacets(widthPx, heightPx) {
+			const facetCols = Math.max(8, Math.round(widthPx / 14));
+			const facetRows = Math.max(8, Math.round(heightPx / 14));
+			facetCount = facetCols * facetRows;
+			const panel = new Float32Array(facetCount * 2);
+			const facet = new Float32Array(facetCount * 2);
+			const seed = new Float32Array(facetCount * 4);
+			for (let i = 0; i < facetCount; i++) {
+				const col = i % facetCols;
+				const row = Math.floor(i / facetCols);
+				panel[i * 2] = (col + Math.random()) / facetCols;
+				panel[i * 2 + 1] = (row + Math.random()) / facetRows;
+				const angle = Math.random() * Math.PI * 2;
+				const tilt = Math.sqrt(Math.random()) * 0.42;
+				facet[i * 2] = Math.cos(angle) * tilt;
+				facet[i * 2 + 1] = Math.sin(angle) * tilt;
+				seed[i * 4] = Math.random();
+				seed[i * 4 + 1] = Math.random() * Math.PI * 2;
+				seed[i * 4 + 2] = 1.5 + Math.random() * 3.5;
+				seed[i * 4 + 3] = 0.5 + Math.random() * Math.random() * 1.5;
+			}
+			gl.bindVertexArray(glitterVao);
+			for (const [index, data, size] of [[0, panel, 2], [1, facet, 2], [2, seed, 4]]) {
+				gl.bindBuffer(gl.ARRAY_BUFFER, glitterBuffers[index]);
+				gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+				gl.enableVertexAttribArray(index);
+				gl.vertexAttribPointer(index, size, gl.FLOAT, false, 0, 0);
+			}
+			gl.bindVertexArray(null);
 		}
-		gl.bindVertexArray(null);
 
 		// Two half-float fields, swapped every step.
 		let cols = 0;
@@ -288,17 +295,20 @@
 			return { texture, framebuffer };
 		}
 		let ratio = 1;
+		// A drop's radius in field cells, set from the panel width so a ring is the same
+		// fraction of the panel at any size.
+		let dropRadius = 12;
 		function resize() {
 			const rect = canvas.getBoundingClientRect();
-			ratio = Math.min(window.devicePixelRatio || 1, 2);
+			ratio = Math.min(window.devicePixelRatio || 1, 3);
 			const width = Math.max(1, Math.round(rect.width * ratio));
 			const height = Math.max(1, Math.round(rect.height * ratio));
 			if (canvas.width !== width || canvas.height !== height) {
 				canvas.width = width;
 				canvas.height = height;
 			}
-			const nextCols = Math.max(2, Math.round(rect.width * span * 0.6));
-			const nextRows = Math.max(2, Math.round(rect.height * span * 0.6));
+			const nextCols = Math.max(2, Math.round(rect.width * span * 0.8));
+			const nextRows = Math.max(2, Math.round(rect.height * span * 0.8));
 			if (nextCols !== cols || nextRows !== rows) {
 				cols = nextCols;
 				rows = nextRows;
@@ -307,6 +317,8 @@
 					gl.deleteFramebuffer(field.framebuffer);
 				}
 				fields.push(makeField(), makeField());
+				makeFacets(rect.width, rect.height);
+				dropRadius = Math.max(6, rect.width * 0.8 * 0.045);
 			}
 		}
 
@@ -329,7 +341,7 @@
 		}
 		let last = null;
 		canvas.addEventListener('pointerdown', (event) => {
-			place(event, 0.4, 12);
+			place(event, 0.7, dropRadius);
 			last = [event.clientX, event.clientY];
 		});
 		canvas.addEventListener('pointermove', (event) => {
@@ -343,9 +355,9 @@
 				return;
 			}
 			const moved = Math.hypot(event.clientX - last[0], event.clientY - last[1]);
-			if (moved < 14) return;
+			if (moved < 3) return;
 			last = [event.clientX, event.clientY];
-			place(event, Math.min(0.12, moved * 0.005), 10);
+			place(event, Math.min(0.35, moved * 0.03), dropRadius * 0.6);
 		});
 		canvas.addEventListener('pointerleave', () => {
 			last = null;
@@ -359,8 +371,8 @@
 		let nextRain = 800;
 		function rain(elapsed) {
 			if (elapsed < nextRain) return;
-			nextRain = elapsed + 2200 + Math.random() * 2600;
-			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, 12, 0.15 + Math.random() * 0.15);
+			nextRain = elapsed + 1200 + Math.random() * 1800;
+			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, dropRadius, 0.45 + Math.random() * 0.35);
 		}
 
 		function step() {
