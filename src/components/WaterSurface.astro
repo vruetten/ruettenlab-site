@@ -24,6 +24,13 @@
 		// an 8-bit field quantises the slope into steps that render as hard bands.
 		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return;
 
+		// The simulated sheet is wider than the visible panel by this fraction on every
+		// side, so rings run out of view and die in the border instead of reflecting.
+		const pad = 0.5;
+		const span = 1 + 2 * pad;
+		const windowOffset = pad / span;
+		const windowScale = 1 / span;
+
 		const vs = `#version 300 es
 			in vec2 a;
 			out vec2 vUv;
@@ -47,12 +54,12 @@
 				float d = texture(uField, vUv - vec2(0.0, uTexel.y)).r;
 				float u = texture(uField, vUv + vec2(0.0, uTexel.y)).r;
 				float lap = l + r + d + u - 4.0 * c.r;
-				// The border soaks up waves so rings do not bounce back across the surface.
+				// The outer fifth of the sheet, all of it out of view, soaks up the waves.
 				vec2 edge = min(vUv, 1.0 - vUv);
-				float sponge = 1.0 - 0.08 * (1.0 - smoothstep(0.0, 0.12, min(edge.x, edge.y)));
-				float h = (2.0 * c.r - c.g + 0.24 * lap) * 0.994 * sponge;
+				float sponge = 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.2, min(edge.x, edge.y)));
+				float h = (2.0 * c.r - c.g + 0.24 * lap) * 0.995 * sponge;
 				// A little viscosity rounds the crests off, so rings fade to a soft swell.
-				h = mix(h, (l + r + d + u) * 0.25, 0.015);
+				h = mix(h, (l + r + d + u) * 0.25, 0.012);
 				if (uDrop.w > 0.0) {
 					float dist = length((vUv - uDrop.xy) / uTexel) / uDrop.z;
 					h += uDrop.w * (0.5 + 0.5 * cos(3.14159 * min(dist, 1.0)));
@@ -65,23 +72,24 @@
 			precision highp float;
 			uniform sampler2D uField;
 			uniform vec2 uTexel;
+			uniform vec2 uWindow;
 			uniform float uTime;
 			uniform float uAspect;
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
-				vec2 uv = vUv;
+				// The panel shows the middle of the sheet.
+				vec2 uv = uWindow.x + vUv * uWindow.y;
 				float l = texture(uField, uv - vec2(uTexel.x, 0.0)).r;
 				float r = texture(uField, uv + vec2(uTexel.x, 0.0)).r;
 				float d = texture(uField, uv - vec2(0.0, uTexel.y)).r;
 				float u = texture(uField, uv + vec2(0.0, uTexel.y)).r;
-				vec2 grad = vec2(r - l, u - d) * 8.0;
+				vec2 grad = vec2(r - l, u - d) * 3.5;
 
-				// A slow swell under the ripples, as five travelling waves.
-				vec2 p = vec2(uv.x * uAspect, uv.y);
+				vec2 p = vec2(vUv.x * uAspect, vUv.y);
 				float t = uTime;
-				// Five directions and speeds that share no ratio, so the interference does
-				// not tile into a lattice.
+				// A slow swell under the ripples, as five travelling waves whose
+				// directions and speeds share no ratio, so they do not tile into a lattice.
 				vec2 k1 = vec2(19.0, 8.0);
 				vec2 k2 = vec2(-10.0, 17.0);
 				vec2 k3 = vec2(26.0, -15.0);
@@ -93,22 +101,46 @@
 				grad += k4 * 0.0030 * cos(dot(k4, p) - t * 0.23);
 				grad += k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
 
-				vec3 n = normalize(vec3(-grad, 1.0));
+				// A fine, faster ripple on top. Its peaks become the sparkle.
+				vec2 f1 = vec2(83.0, 47.0);
+				vec2 f2 = vec2(-51.0, 97.0);
+				vec2 f3 = vec2(120.0, -33.0);
+				vec2 f4 = vec2(-97.0, -71.0);
+				float fine = sin(dot(f1, p) + t * 2.1) + sin(dot(f2, p) - t * 1.7)
+					+ sin(dot(f3, p) + t * 2.9) + sin(dot(f4, p) - t * 2.3);
+
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
 				vec3 half1 = normalize(light + view);
+
+				vec3 n = normalize(vec3(-grad, 1.0));
 				float spec = pow(max(dot(n, half1), 0.0), 24.0);
 				vec3 refl = reflect(-view, n);
 				// Zero on a flat surface, so still water stays as dark as the page.
 				float sky = max(smoothstep(-0.35, 0.45, refl.y * 0.7 - refl.x * 0.3) - 0.4375, 0.0);
 				float rim = pow(1.0 - max(dot(n, view), 0.0), 2.0);
 
-				float fade = smoothstep(0.0, 0.32, vUv.x) * smoothstep(1.0, 0.8, vUv.x)
-					* smoothstep(0.0, 0.16, vUv.y) * smoothstep(1.0, 0.84, vUv.y);
+				// Sparkle: points at the peaks of the fine ripple, only on the lit flanks
+				// of the swell.
+				float spark = pow(max(fine * 0.25, 0.0), 8.0) * smoothstep(0.0, 0.12, sky + spec * 0.5);
+
+				// The surface reflects a sky that is blue on one side and amber on the
+				// other, split across the light direction, so the two flanks of a ring take
+				// opposite tints and the split drifts slowly.
+				vec3 cool = vec3(0.45, 0.66, 0.92);
+				vec3 warm = vec3(0.96, 0.62, 0.30);
+				float side = refl.x * 0.84 + refl.y * 0.54 + 0.15 * sin(t * 0.15);
+				vec3 tint = mix(cool, warm, smoothstep(-0.2, 0.2, side));
+				vec3 silver = vec3(0.64, 0.67, 0.69);
+				vec3 glint = mix(silver, tint, 0.7);
+
+				// The panel melts into the page on every side, widest on the text side.
+				float fade = smoothstep(0.0, 0.38, vUv.x) * smoothstep(1.0, 0.72, vUv.x)
+					* smoothstep(0.0, 0.3, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
 				vec3 deep = vec3(0.043, 0.047, 0.047);
-				vec3 silver = vec3(0.62, 0.66, 0.68);
-				float light1 = spec * 0.34 + sky * 0.14 + rim * 0.18;
-				o = vec4(deep + silver * fade * light1, 1.0);
+				vec3 light1 = glint * (spec * 0.34 + sky * 0.14 + rim * 0.18)
+					+ mix(silver, warm, 0.35) * spark * 0.45;
+				o = vec4(deep + light1 * fade, 1.0);
 			}`;
 
 		function compile(type, source) {
@@ -145,6 +177,7 @@
 		const drawLoc = {
 			field: gl.getUniformLocation(draw, 'uField'),
 			texel: gl.getUniformLocation(draw, 'uTexel'),
+			window: gl.getUniformLocation(draw, 'uWindow'),
 			time: gl.getUniformLocation(draw, 'uTime'),
 			aspect: gl.getUniformLocation(draw, 'uAspect'),
 		};
@@ -183,8 +216,8 @@
 				canvas.width = width;
 				canvas.height = height;
 			}
-			const nextCols = Math.max(2, Math.round(rect.width * 0.6));
-			const nextRows = Math.max(2, Math.round(rect.height * 0.6));
+			const nextCols = Math.max(2, Math.round(rect.width * span * 0.6));
+			const nextRows = Math.max(2, Math.round(rect.height * span * 0.6));
 			if (nextCols !== cols || nextRows !== rows) {
 				cols = nextCols;
 				rows = nextRows;
@@ -196,19 +229,23 @@
 			}
 		}
 
-		// Drops queue up and enter the field one per simulation step.
+		// Drops queue up and enter the field one per simulation step. Positions are in
+		// panel coordinates and map into the middle of the sheet.
 		const drops = [];
+		function drop(u, v, radius, mag) {
+			drops.push([windowOffset + u * windowScale, windowOffset + v * windowScale, radius, mag]);
+		}
 		function place(event, mag, radius) {
 			const rect = canvas.getBoundingClientRect();
 			if (rect.width === 0 || rect.height === 0) return;
 			const u = (event.clientX - rect.left) / rect.width;
 			const v = 1 - (event.clientY - rect.top) / rect.height;
 			if (u < 0 || v < 0 || u > 1 || v > 1) return;
-			drops.push([u, v, radius, mag]);
+			drop(u, v, radius, mag);
 		}
 		let last = null;
 		canvas.addEventListener('pointerdown', (event) => {
-			place(event, 0.6, 7);
+			place(event, 0.4, 12);
 			last = [event.clientX, event.clientY];
 		});
 		canvas.addEventListener('pointermove', (event) => {
@@ -219,19 +256,20 @@
 			const moved = Math.hypot(event.clientX - last[0], event.clientY - last[1]);
 			if (moved < 14) return;
 			last = [event.clientX, event.clientY];
-			place(event, Math.min(0.3, moved * 0.01), 5);
+			place(event, Math.min(0.12, moved * 0.005), 10);
 		});
 		canvas.addEventListener('pointerleave', () => {
 			last = null;
 		});
 
 		// A random drop every few seconds keeps rings crossing the surface when nobody is
-		// pointing at the water.
+		// pointing at the water. Some land just outside the panel, so rings also arrive
+		// from beyond its edges.
 		let nextRain = 800;
 		function rain(elapsed) {
 			if (elapsed < nextRain) return;
 			nextRain = elapsed + 2200 + Math.random() * 2600;
-			drops.push([0.25 + Math.random() * 0.7, 0.15 + Math.random() * 0.7, 5, 0.2 + Math.random() * 0.2]);
+			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, 12, 0.15 + Math.random() * 0.15);
 		}
 
 		function step() {
@@ -243,22 +281,26 @@
 			gl.bindTexture(gl.TEXTURE_2D, from.texture);
 			gl.uniform1i(simLoc.field, 0);
 			gl.uniform2f(simLoc.texel, 1 / cols, 1 / rows);
-			const drop = drops.shift();
-			if (drop) gl.uniform4f(simLoc.drop, drop[0], drop[1], drop[2], drop[3]);
+			const next = drops.shift();
+			if (next) gl.uniform4f(simLoc.drop, next[0], next[1], next[2], next[3]);
 			else gl.uniform4f(simLoc.drop, 0, 0, 1, 0);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			fields.reverse();
 		}
 
+		// The wave advances 120 steps a second whatever the display's refresh rate.
+		const stepMs = 1000 / 120;
 		const started = performance.now();
+		let stepped = 0;
 		function frame(now) {
 			requestAnimationFrame(frame);
 			if (document.hidden) return;
 			resize();
 			const elapsed = now - started;
 			rain(elapsed);
-			step();
-			step();
+			const due = Math.min(4, Math.floor(elapsed / stepMs) - stepped);
+			for (let i = 0; i < due; i++) step();
+			stepped = Math.floor(elapsed / stepMs);
 			gl.useProgram(draw);
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			gl.viewport(0, 0, canvas.width, canvas.height);
@@ -266,8 +308,9 @@
 			gl.bindTexture(gl.TEXTURE_2D, fields[0].texture);
 			gl.uniform1i(drawLoc.field, 0);
 			gl.uniform2f(drawLoc.texel, 1 / cols, 1 / rows);
+			gl.uniform2f(drawLoc.window, windowOffset, windowScale);
 			gl.uniform1f(drawLoc.time, elapsed / 1000);
-			gl.uniform1f(drawLoc.aspect, cols / rows);
+			gl.uniform1f(drawLoc.aspect, canvas.width / canvas.height);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 		}
 		requestAnimationFrame(frame);
