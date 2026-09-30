@@ -13,6 +13,7 @@
 		}
 	});
 
+	// WATER-BEGIN
 	function startWater(canvas) {
 		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		const gl = canvas.getContext('webgl2', {
@@ -31,8 +32,44 @@
 		const windowOffset = pad / span;
 		const windowScale = 1 / span;
 
-		const vs = `#version 300 es
-			in vec2 a;
+		// Shared by the sheen and the glitter: the wave slope at a point of the panel,
+		// from the simulated field plus a slow analytic swell of five travelling waves
+		// whose directions and speeds share no ratio, so they do not tile into a lattice.
+		const slopeGlsl = `
+			uniform sampler2D uField;
+			uniform vec2 uTexel;
+			uniform vec2 uWindow;
+			uniform float uTime;
+			uniform float uAspect;
+			vec2 waveSlope(vec2 panel) {
+				vec2 uv = uWindow.x + panel * uWindow.y;
+				float l = texture(uField, uv - vec2(uTexel.x, 0.0)).r;
+				float r = texture(uField, uv + vec2(uTexel.x, 0.0)).r;
+				float d = texture(uField, uv - vec2(0.0, uTexel.y)).r;
+				float u = texture(uField, uv + vec2(0.0, uTexel.y)).r;
+				vec2 grad = vec2(r - l, u - d) * 3.5;
+				vec2 p = vec2(panel.x * uAspect, panel.y);
+				float t = uTime;
+				vec2 k1 = vec2(19.0, 8.0);
+				vec2 k2 = vec2(-10.0, 17.0);
+				vec2 k3 = vec2(26.0, -15.0);
+				vec2 k4 = vec2(7.0, -23.0);
+				vec2 k5 = vec2(-31.0, -6.0);
+				grad += k1 * 0.0060 * cos(dot(k1, p) + t * 0.42);
+				grad += k2 * 0.0050 * cos(dot(k2, p) - t * 0.31);
+				grad += k3 * 0.0026 * cos(dot(k3, p) + t * 0.57);
+				grad += k4 * 0.0030 * cos(dot(k4, p) - t * 0.23);
+				grad += k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
+				return grad;
+			}
+			// The panel melts into the page on every side, widest on the text side.
+			float panelFade(vec2 panel) {
+				return smoothstep(0.0, 0.28, panel.x) * smoothstep(1.0, 0.72, panel.x)
+					* smoothstep(0.0, 0.3, panel.y) * smoothstep(1.0, 0.7, panel.y);
+			}`;
+
+		const screenVs = `#version 300 es
+			layout(location = 0) in vec2 a;
 			out vec2 vUv;
 			void main() {
 				vUv = a * 0.5 + 0.5;
@@ -67,80 +104,90 @@
 				o = vec4(h, c.r, 0.0, 1.0);
 			}`;
 
-		// Shade the surface from its normal, so tone varies continuously with slope.
-		const drawFs = `#version 300 es
+		// The sheen: a faint continuous shading of the surface from its normal, so the
+		// water has a body under the glitter.
+		const sheenFs = `#version 300 es
 			precision highp float;
-			uniform sampler2D uField;
-			uniform vec2 uTexel;
-			uniform vec2 uWindow;
-			uniform float uTime;
-			uniform float uAspect;
+			${slopeGlsl}
 			in vec2 vUv;
 			out vec4 o;
 			void main() {
-				// The panel shows the middle of the sheet.
-				vec2 uv = uWindow.x + vUv * uWindow.y;
-				float l = texture(uField, uv - vec2(uTexel.x, 0.0)).r;
-				float r = texture(uField, uv + vec2(uTexel.x, 0.0)).r;
-				float d = texture(uField, uv - vec2(0.0, uTexel.y)).r;
-				float u = texture(uField, uv + vec2(0.0, uTexel.y)).r;
-				vec2 grad = vec2(r - l, u - d) * 3.5;
-
-				vec2 p = vec2(vUv.x * uAspect, vUv.y);
-				float t = uTime;
-				// A slow swell under the ripples, as five travelling waves whose
-				// directions and speeds share no ratio, so they do not tile into a lattice.
-				vec2 k1 = vec2(19.0, 8.0);
-				vec2 k2 = vec2(-10.0, 17.0);
-				vec2 k3 = vec2(26.0, -15.0);
-				vec2 k4 = vec2(7.0, -23.0);
-				vec2 k5 = vec2(-31.0, -6.0);
-				grad += k1 * 0.0060 * cos(dot(k1, p) + t * 0.42);
-				grad += k2 * 0.0050 * cos(dot(k2, p) - t * 0.31);
-				grad += k3 * 0.0026 * cos(dot(k3, p) + t * 0.57);
-				grad += k4 * 0.0030 * cos(dot(k4, p) - t * 0.23);
-				grad += k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
-
-				// A fine, faster ripple on top. Its peaks become the sparkle.
-				vec2 f1 = vec2(83.0, 47.0);
-				vec2 f2 = vec2(-51.0, 97.0);
-				vec2 f3 = vec2(120.0, -33.0);
-				vec2 f4 = vec2(-97.0, -71.0);
-				float fine = sin(dot(f1, p) + t * 2.1) + sin(dot(f2, p) - t * 1.7)
-					+ sin(dot(f3, p) + t * 2.9) + sin(dot(f4, p) - t * 2.3);
-
+				vec2 grad = waveSlope(vUv);
 				vec3 view = vec3(0.0, 0.0, 1.0);
 				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
 				vec3 half1 = normalize(light + view);
-
 				vec3 n = normalize(vec3(-grad, 1.0));
 				float spec = pow(max(dot(n, half1), 0.0), 24.0);
 				vec3 refl = reflect(-view, n);
 				// Zero on a flat surface, so still water stays as dark as the page.
 				float sky = max(smoothstep(-0.35, 0.45, refl.y * 0.7 - refl.x * 0.3) - 0.4375, 0.0);
 				float rim = pow(1.0 - max(dot(n, view), 0.0), 2.0);
-
-				// Sparkle: points at the peaks of the fine ripple, only on the lit flanks
-				// of the swell.
-				float spark = pow(max(fine * 0.25, 0.0), 8.0) * smoothstep(0.0, 0.12, sky + spec * 0.5);
-
-				// The surface reflects a sky that is blue on one side and amber on the
-				// other, split across the light direction, so the two flanks of a ring take
-				// opposite tints and the split drifts slowly.
-				vec3 cool = vec3(0.45, 0.66, 0.92);
-				vec3 warm = vec3(0.96, 0.62, 0.30);
-				float side = refl.x * 0.84 + refl.y * 0.54 + 0.15 * sin(t * 0.15);
+				// Blue on one side of the light, amber on the other, drifting slowly.
+				vec3 cool = vec3(0.43, 0.70, 0.96);
+				vec3 warm = vec3(0.98, 0.60, 0.30);
+				float side = refl.x * 0.84 + refl.y * 0.54 + 0.15 * sin(uTime * 0.15);
 				vec3 tint = mix(cool, warm, smoothstep(-0.2, 0.2, side));
-				vec3 silver = vec3(0.64, 0.67, 0.69);
-				vec3 glint = mix(silver, tint, 0.7);
-
-				// The panel melts into the page on every side, widest on the text side.
-				float fade = smoothstep(0.0, 0.38, vUv.x) * smoothstep(1.0, 0.72, vUv.x)
-					* smoothstep(0.0, 0.3, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
+				vec3 glint = mix(vec3(0.64, 0.67, 0.69), tint, 0.7);
 				vec3 deep = vec3(0.043, 0.047, 0.047);
-				vec3 light1 = glint * (spec * 0.34 + sky * 0.14 + rim * 0.18)
-					+ mix(silver, warm, 0.35) * spark * 0.45;
-				o = vec4(deep + light1 * fade, 1.0);
+				o = vec4(deep + glint * (spec * 0.16 + sky * 0.07 + rim * 0.08) * panelFade(vUv), 1.0);
+			}`;
+
+		// The glitter: thousands of facets scattered on the surface. Each lights up when
+		// the wave slope under it, plus its own fixed tilt, turns it toward the light, so
+		// every passing ring switches facets on and off as it goes.
+		const glitterVs = `#version 300 es
+			precision highp float;
+			layout(location = 0) in vec2 aPanel;
+			layout(location = 1) in vec2 aFacet;
+			layout(location = 2) in vec4 aSeed;
+			${slopeGlsl}
+			uniform float uRatio;
+			uniform vec2 uPointer;
+			out float vBright;
+			out vec3 vColor;
+			void main() {
+				vec2 grad = waveSlope(aPanel);
+				vec3 n = normalize(vec3(-(grad + aFacet), 1.0));
+				vec3 view = vec3(0.0, 0.0, 1.0);
+				vec3 light = normalize(vec3(-0.12, 0.2, 0.97));
+				vec3 half1 = normalize(light + view);
+				float glint = pow(max(dot(n, half1), 0.0), 80.0);
+				float wake = smoothstep(0.04, 0.35, length(grad));
+				float twinkle = 0.72 + 0.28 * sin(uTime * aSeed.z + aSeed.y);
+				float lens = 1.0 - smoothstep(0.0, 0.16, length((aPanel - uPointer) * vec2(uAspect, 1.0)));
+				// A passing ring lights the facets along its crest into a bright ring.
+				float bright = (glint * (1.2 + 1.2 * wake) + 0.4 * wake * wake) * twinkle * panelFade(aPanel);
+				bright *= 1.0 + lens * 0.9;
+				vBright = bright;
+				// The Astra palette: two blues, two oranges, white, in its proportions.
+				float pick = aSeed.x;
+				vColor = pick < 0.36 ? vec3(0.427, 0.796, 0.957)
+					: pick < 0.52 ? vec3(0.478, 0.694, 0.996)
+					: pick < 0.64 ? vec3(0.973, 0.475, 0.082)
+					: pick < 0.74 ? vec3(0.980, 0.600, 0.298)
+					: vec3(0.961, 0.965, 0.984);
+				float size = (2.0 + (8.0 * glint + 3.0 * wake * wake) * aSeed.w + lens * 1.5) * uRatio;
+				gl_PointSize = max(size, 2.0);
+				gl_Position = vec4(aPanel * 2.0 - 1.0, 0.0, 1.0);
+			}`;
+		const glitterFs = `#version 300 es
+			precision highp float;
+			in float vBright;
+			in vec3 vColor;
+			out vec4 o;
+			void main() {
+				vec2 point = (gl_PointCoord - 0.5) * 2.0;
+				float dist = length(point);
+				float disc = 1.0 - smoothstep(0.08, 1.0, dist);
+				float core = pow(disc, 2.2);
+				// The brightest facets grow a four-ray flare.
+				float rayX = exp(-abs(point.y) * 28.0) * (1.0 - smoothstep(0.18, 1.0, abs(point.x)));
+				float rayY = exp(-abs(point.x) * 28.0) * (1.0 - smoothstep(0.18, 1.0, abs(point.y)));
+				float rays = max(rayX, rayY) * 0.28 * smoothstep(0.5, 1.2, vBright);
+				float alpha = max(core, rays) * vBright;
+				float whiteCore = core * smoothstep(0.6, 1.4, vBright) * 0.82;
+				vec3 colour = mix(vColor, vec3(1.0), whiteCore);
+				o = vec4(colour * alpha, 1.0);
 			}`;
 
 		function compile(type, source) {
@@ -152,41 +199,74 @@
 			}
 			return shader;
 		}
-		function program(fragment) {
+		function program(vertex, fragment) {
 			const p = gl.createProgram();
-			gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+			gl.attachShader(p, compile(gl.VERTEX_SHADER, vertex));
 			gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fragment));
-			gl.bindAttribLocation(p, 0, 'a');
 			gl.linkProgram(p);
+			if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+				throw new Error(gl.getProgramInfoLog(p) || 'program');
+			}
 			return p;
 		}
 		let sim;
-		let draw;
+		let sheen;
+		let glitter;
 		try {
-			sim = program(simFs);
-			draw = program(drawFs);
+			sim = program(screenVs, simFs);
+			sheen = program(screenVs, sheenFs);
+			glitter = program(glitterVs, glitterFs);
 		} catch (error) {
 			console.error('water shader', error);
 			return;
 		}
-		const simLoc = {
-			field: gl.getUniformLocation(sim, 'uField'),
-			texel: gl.getUniformLocation(sim, 'uTexel'),
-			drop: gl.getUniformLocation(sim, 'uDrop'),
-		};
-		const drawLoc = {
-			field: gl.getUniformLocation(draw, 'uField'),
-			texel: gl.getUniformLocation(draw, 'uTexel'),
-			window: gl.getUniformLocation(draw, 'uWindow'),
-			time: gl.getUniformLocation(draw, 'uTime'),
-			aspect: gl.getUniformLocation(draw, 'uAspect'),
-		};
+		const locate = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
+		const simLoc = locate(sim, ['uField', 'uTexel', 'uDrop']);
+		const slopeNames = ['uField', 'uTexel', 'uWindow', 'uTime', 'uAspect'];
+		const sheenLoc = locate(sheen, slopeNames);
+		const glitterLoc = locate(glitter, [...slopeNames, 'uRatio', 'uPointer']);
 
-		const buffer = gl.createBuffer();
-		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		// One triangle that covers the screen, for the simulation and the sheen.
+		const screenVao = gl.createVertexArray();
+		gl.bindVertexArray(screenVao);
+		const screenBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, screenBuffer);
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 		gl.enableVertexAttribArray(0);
 		gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+		// The facets: a jittered grid over the panel, each with a fixed random tilt, a
+		// colour pick, a twinkle phase and rate, and a size.
+		const facetCols = 78;
+		const facetRows = 64;
+		const facetCount = facetCols * facetRows;
+		const panel = new Float32Array(facetCount * 2);
+		const facet = new Float32Array(facetCount * 2);
+		const seed = new Float32Array(facetCount * 4);
+		for (let i = 0; i < facetCount; i++) {
+			const col = i % facetCols;
+			const row = Math.floor(i / facetCols);
+			panel[i * 2] = (col + Math.random()) / facetCols;
+			panel[i * 2 + 1] = (row + Math.random()) / facetRows;
+			const angle = Math.random() * Math.PI * 2;
+			const tilt = Math.sqrt(Math.random()) * 0.42;
+			facet[i * 2] = Math.cos(angle) * tilt;
+			facet[i * 2 + 1] = Math.sin(angle) * tilt;
+			seed[i * 4] = Math.random();
+			seed[i * 4 + 1] = Math.random() * Math.PI * 2;
+			seed[i * 4 + 2] = 1.5 + Math.random() * 3.5;
+			seed[i * 4 + 3] = 0.5 + Math.random() * Math.random() * 1.5;
+		}
+		const glitterVao = gl.createVertexArray();
+		gl.bindVertexArray(glitterVao);
+		for (const [index, data, size] of [[0, panel, 2], [1, facet, 2], [2, seed, 4]]) {
+			const buffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+			gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+			gl.enableVertexAttribArray(index);
+			gl.vertexAttribPointer(index, size, gl.FLOAT, false, 0, 0);
+		}
+		gl.bindVertexArray(null);
 
 		// Two half-float fields, swapped every step.
 		let cols = 0;
@@ -207,9 +287,10 @@
 			gl.clear(gl.COLOR_BUFFER_BIT);
 			return { texture, framebuffer };
 		}
+		let ratio = 1;
 		function resize() {
 			const rect = canvas.getBoundingClientRect();
-			const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+			ratio = Math.min(window.devicePixelRatio || 1, 2);
 			const width = Math.max(1, Math.round(rect.width * ratio));
 			const height = Math.max(1, Math.round(rect.height * ratio));
 			if (canvas.width !== width || canvas.height !== height) {
@@ -235,13 +316,16 @@
 		function drop(u, v, radius, mag) {
 			drops.push([windowOffset + u * windowScale, windowOffset + v * windowScale, radius, mag]);
 		}
-		function place(event, mag, radius) {
+		const pointer = [-10, -10];
+		function panelPoint(event) {
 			const rect = canvas.getBoundingClientRect();
-			if (rect.width === 0 || rect.height === 0) return;
-			const u = (event.clientX - rect.left) / rect.width;
-			const v = 1 - (event.clientY - rect.top) / rect.height;
-			if (u < 0 || v < 0 || u > 1 || v > 1) return;
-			drop(u, v, radius, mag);
+			if (rect.width === 0 || rect.height === 0) return null;
+			return [(event.clientX - rect.left) / rect.width, 1 - (event.clientY - rect.top) / rect.height];
+		}
+		function place(event, mag, radius) {
+			const at = panelPoint(event);
+			if (!at || at[0] < 0 || at[1] < 0 || at[0] > 1 || at[1] > 1) return;
+			drop(at[0], at[1], radius, mag);
 		}
 		let last = null;
 		canvas.addEventListener('pointerdown', (event) => {
@@ -249,6 +333,11 @@
 			last = [event.clientX, event.clientY];
 		});
 		canvas.addEventListener('pointermove', (event) => {
+			const at = panelPoint(event);
+			if (at) {
+				pointer[0] = at[0];
+				pointer[1] = at[1];
+			}
 			if (!last) {
 				last = [event.clientX, event.clientY];
 				return;
@@ -260,6 +349,8 @@
 		});
 		canvas.addEventListener('pointerleave', () => {
 			last = null;
+			pointer[0] = -10;
+			pointer[1] = -10;
 		});
 
 		// A random drop every few seconds keeps rings crossing the surface when nobody is
@@ -275,17 +366,28 @@
 		function step() {
 			const [from, to] = fields;
 			gl.useProgram(sim);
+			gl.bindVertexArray(screenVao);
 			gl.bindFramebuffer(gl.FRAMEBUFFER, to.framebuffer);
 			gl.viewport(0, 0, cols, rows);
 			gl.activeTexture(gl.TEXTURE0);
 			gl.bindTexture(gl.TEXTURE_2D, from.texture);
-			gl.uniform1i(simLoc.field, 0);
-			gl.uniform2f(simLoc.texel, 1 / cols, 1 / rows);
+			gl.uniform1i(simLoc.uField, 0);
+			gl.uniform2f(simLoc.uTexel, 1 / cols, 1 / rows);
 			const next = drops.shift();
-			if (next) gl.uniform4f(simLoc.drop, next[0], next[1], next[2], next[3]);
-			else gl.uniform4f(simLoc.drop, 0, 0, 1, 0);
+			if (next) gl.uniform4f(simLoc.uDrop, next[0], next[1], next[2], next[3]);
+			else gl.uniform4f(simLoc.uDrop, 0, 0, 1, 0);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			fields.reverse();
+		}
+
+		function setSlopeUniforms(loc, seconds) {
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, fields[0].texture);
+			gl.uniform1i(loc.uField, 0);
+			gl.uniform2f(loc.uTexel, 1 / cols, 1 / rows);
+			gl.uniform2f(loc.uWindow, windowOffset, windowScale);
+			gl.uniform1f(loc.uTime, seconds);
+			gl.uniform1f(loc.uAspect, canvas.width / canvas.height);
 		}
 
 		// The wave advances 120 steps a second whatever the display's refresh rate.
@@ -301,18 +403,26 @@
 			const due = Math.min(4, Math.floor(elapsed / stepMs) - stepped);
 			for (let i = 0; i < due; i++) step();
 			stepped = Math.floor(elapsed / stepMs);
-			gl.useProgram(draw);
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			gl.viewport(0, 0, canvas.width, canvas.height);
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, fields[0].texture);
-			gl.uniform1i(drawLoc.field, 0);
-			gl.uniform2f(drawLoc.texel, 1 / cols, 1 / rows);
-			gl.uniform2f(drawLoc.window, windowOffset, windowScale);
-			gl.uniform1f(drawLoc.time, elapsed / 1000);
-			gl.uniform1f(drawLoc.aspect, canvas.width / canvas.height);
+			gl.disable(gl.BLEND);
+			gl.useProgram(sheen);
+			gl.bindVertexArray(screenVao);
+			setSlopeUniforms(sheenLoc, elapsed / 1000);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+			gl.enable(gl.BLEND);
+			gl.blendFunc(gl.ONE, gl.ONE);
+			gl.useProgram(glitter);
+			gl.bindVertexArray(glitterVao);
+			setSlopeUniforms(glitterLoc, elapsed / 1000);
+			gl.uniform1f(glitterLoc.uRatio, ratio);
+			gl.uniform2f(glitterLoc.uPointer, pointer[0], pointer[1]);
+			gl.drawArrays(gl.POINTS, 0, facetCount);
+			gl.bindVertexArray(null);
 		}
 		requestAnimationFrame(frame);
 	}
+	// WATER-END
 </script>
