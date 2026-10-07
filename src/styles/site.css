@@ -1001,3 +1001,8 @@ main h2 {
 .has-backdrop .contact-bar {
 	background: transparent;
 }
+
+/* Brief tiles keep the text colour under the dark theme's orange link colour. */
+html[data-theme='dark'] main a.brief {
+	color: var(--fg);
+}
