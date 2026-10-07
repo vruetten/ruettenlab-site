@@ -93,8 +93,8 @@ const backdrop = frontmatter?.backdrop;
 		<title>{labName}</title>
 		<slot name="head" />
 	</head>
-	<body class:list={[{ 'has-backdrop': backdrop }]}>
-		{backdrop && <div class="backdrop" aria-hidden="true" style={`background-image: url('${siteHref(backdrop)}')`} />}
+	<body class:list={[{ 'has-backdrop': backdrop }]} style={backdrop ? `--backdrop: url('${siteHref(backdrop)}')` : undefined}>
+		{backdrop && <div class="backdrop" aria-hidden="true" />}
 		<header class="wrap">
 			<nav>
 					<ul>

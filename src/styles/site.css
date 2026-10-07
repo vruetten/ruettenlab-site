@@ -913,10 +913,19 @@ main h2 {
 	position: fixed;
 	inset: 0;
 	z-index: 0;
-	background-position: center;
-	background-size: cover;
+	background: var(--backdrop) center / cover no-repeat;
 	opacity: 0.16;
 	pointer-events: none;
+}
+
+/* The sticky header stays opaque, so text scrolled under it stays hidden, and paints
+   the same photograph pinned to the viewport under 84% of the page colour: the same
+   mix as the 16% backdrop, so the photograph runs on through the navigation bar. */
+.has-backdrop header.wrap {
+	background:
+		linear-gradient(color-mix(in srgb, var(--bg) 84%, transparent), color-mix(in srgb, var(--bg) 84%, transparent)),
+		var(--backdrop) center / cover no-repeat fixed,
+		var(--bg);
 }
 
 .has-backdrop > main,
