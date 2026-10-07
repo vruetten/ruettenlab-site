@@ -45,9 +45,12 @@ The shell has no git identity configured. Commit as the repository's author:
 git -c user.name="Virginie Ruetten" -c user.email="15912669+vruetten@users.noreply.github.com" commit ...
 ```
 
-Never force-push. `princeton_image.png` (14 MB, the source of the resized photos in
-`src/assets/news/princeton.jpg` and `public/backdrops/princeton.jpg`) and `features.md` sit
-untracked at the root as of 2026-10-07; ask Virginie before committing either.
+Never force-push. `originals/` is git-ignored and holds full-resolution source images
+kept for reference on this Mac only, never published; it has no copy on GitHub.
+`originals/princeton-campus-3840x2160.png` (14 MB) is the source of
+`src/assets/news/princeton.jpg` and `public/backdrops/princeton.jpg`; resize from it when a
+larger version is needed. `features.md` at the root is untracked as of 2026-10-07; ask
+Virginie before committing it.
 
 ## Content
 

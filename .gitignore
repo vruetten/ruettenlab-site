@@ -22,3 +22,6 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Full-resolution source images, kept locally for reference, never published.
+originals/
