@@ -67,6 +67,7 @@ const news = defineCollection({
 			url: z.string().url().optional(),
 			topic: z.enum(['wholistic', 'mhs']).optional(),
 			image: z.string().optional(),
+			logo: z.string().optional(),
 			crop: z.enum(['center', 'left', 'right']).default('center'),
 			size: z.enum(['large', 'small']).default('large'),
 			lead: z.boolean().default(false),

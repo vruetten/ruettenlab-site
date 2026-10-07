@@ -15,6 +15,16 @@ function imageFor(name: string) {
 	return entry[1].default;
 }
 
+const logos = import.meta.glob<{ default: ImageMetadata }>('../../assets/news/logos/*.png', {
+	eager: true,
+});
+
+function logoFor(name: string) {
+	const entry = Object.entries(logos).find(([key]) => key.endsWith(`/${name}`));
+	if (!entry) throw new Error(`Missing news logo ${name}`);
+	return entry[1].default;
+}
+
 function widthsFor(image: ImageMetadata) {
 	const steps = [480, 768, 1200, 1600].filter((width) => width < image.width);
 	steps.push(image.width);
@@ -36,8 +46,27 @@ const news = (await getCollection('news')).sort((a, b) => {
 	return label(a).localeCompare(label(b));
 });
 
-const cards = news.filter((item) => item.data.image);
-const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
+// One grid in news order. An item with an image fills a cell as a card; items without
+// one are briefs. A run of consecutive briefs is split into cells of two, with a run of
+// odd length closing on a cell of three, so no brief sits alone in a cell unless the
+// run is a single brief.
+type Item = (typeof news)[number];
+type Cell = { card: Item } | { briefs: Item[] };
+const cells: Cell[] = [];
+let run: Item[] = [];
+function closeRun() {
+	while (run.length > 0) {
+		const take = run.length === 3 ? 3 : Math.min(2, run.length);
+		cells.push({ briefs: run.splice(0, take) });
+	}
+}
+for (const item of news) {
+	if (item.data.image) {
+		closeRun();
+		cells.push({ card: item });
+	} else run.push(item);
+}
+closeRun();
 ---
 
 <Base>
@@ -55,7 +84,43 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 	</noscript>
 	<ul class="press-grid">
 		{
-			cards.map((item) => {
+			cells.map((cell) => {
+				if ('briefs' in cell) {
+					return (
+						<li class="brief-stack">
+							{cell.briefs.map((item) => {
+								const label = item.data.kind === 'press' ? item.data.title : item.data.text;
+								const logo = item.data.logo ? logoFor(item.data.logo) : null;
+								const body = (
+									<>
+										{logo && (
+											<span
+												class="brief-logo"
+												aria-hidden="true"
+												style={`--logo: url('${logo.src}'); aspect-ratio: ${logo.width} / ${logo.height}`}
+											/>
+										)}
+										<span class="brief-text">
+											<time class="brief-date" datetime={item.data.date.toISOString().slice(0, 10)}>
+												{formatDate(item.data.date, item.data.datePrecision)}
+											</time>
+											<span class="brief-title">{label}</span>
+										</span>
+									</>
+								);
+								const upcoming = isUpcoming(item.data.date, item.data.datePrecision);
+								return item.data.url ? (
+									<a class:list={['brief', { upcoming }]} href={item.data.url} target="_blank" rel="noopener noreferrer">
+										{body}
+									</a>
+								) : (
+									<div class:list={['brief', { upcoming }]}>{body}</div>
+								);
+							})}
+						</li>
+					);
+				}
+				const item = cell.card;
 				const name = item.data.image;
 				if (!name) return null;
 				const photo = imageFor(name);
@@ -115,29 +180,6 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 			})
 		}
 	</ul>
-	{
-		lab.length > 0 && (
-			<section class="lab-news">
-				<h2>Lab</h2>
-				<ul class="lab-list">
-					{lab.map((item) => (
-						<li class:list={[{ upcoming: isUpcoming(item.data.date, item.data.datePrecision) }]}>
-							<time datetime={item.data.date.toISOString().slice(0, 10)}>
-								{formatDate(item.data.date, item.data.datePrecision)}
-							</time>
-							{item.data.url ? (
-								<a href={item.data.url} target="_blank" rel="noopener noreferrer">
-									<span>{item.data.text}</span>
-								</a>
-							) : (
-								<span>{item.data.text}</span>
-							)}
-						</li>
-					))}
-				</ul>
-			</section>
-		)
-	}
 	<script is:inline>
 		(function () {
 			var root = document.documentElement;
