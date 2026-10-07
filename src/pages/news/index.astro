@@ -25,9 +25,11 @@ function logoFor(name: string) {
 	return entry[1].default;
 }
 
+// Widths offered to the browser, capped at 1000 px: a phone at three device pixels per
+// CSS pixel would otherwise pick a 1600 px file for a 390 px wide card.
 function widthsFor(image: ImageMetadata) {
-	const steps = [480, 768, 1200, 1600].filter((width) => width < image.width);
-	steps.push(image.width);
+	const steps = [480, 800, 1000].filter((width) => width < image.width);
+	if (image.width < 1000) steps.push(image.width);
 	return steps;
 }
 
@@ -64,21 +66,9 @@ closeRun();
 ---
 
 <Base>
-	<style slot="head" is:inline>
-		html:not([data-news='ready']) body {
-			opacity: 0;
-		}
-	</style>
-	<noscript slot="head">
-		<style is:inline>
-			body {
-				opacity: 1 !important;
-			}
-		</style>
-	</noscript>
 	<ul class="press-grid">
 		{
-			cells.map((cell) => {
+			cells.map((cell, index) => {
 				if ('briefs' in cell) {
 					return (
 						<li class="brief-stack">
@@ -134,8 +124,8 @@ closeRun();
 									alt={alt}
 									widths={widthsFor(photo)}
 									sizes="(max-width: 800px) 100vw, 33vw"
-									quality={90}
-									loading="eager"
+									quality={72}
+									loading={index < 3 ? 'eager' : 'lazy'}
 									decoding="async"
 								/>
 							</span>
@@ -155,8 +145,8 @@ closeRun();
 									alt={alt}
 									widths={widthsFor(photo)}
 									sizes="(max-width: 800px) 100vw, 33vw"
-									quality={90}
-									loading="eager"
+									quality={72}
+									loading={index < 3 ? 'eager' : 'lazy'}
 									decoding="async"
 								/>
 							</span>
@@ -174,37 +164,4 @@ closeRun();
 			})
 		}
 	</ul>
-	<script is:inline>
-		(function () {
-			var root = document.documentElement;
-			var images = document.querySelectorAll('.press-figure img');
-			var remaining = images.length;
-			function reveal() {
-				root.setAttribute('data-news', 'ready');
-			}
-			if (!remaining) {
-				reveal();
-				return;
-			}
-			function finish() {
-				remaining -= 1;
-				if (remaining <= 0) reveal();
-			}
-			function settle(img) {
-				if (img.complete && img.naturalWidth > 0) {
-					finish();
-					return;
-				}
-				if (img.complete) {
-					if (typeof img.decode === 'function') img.decode().then(finish, finish);
-					else finish();
-					return;
-				}
-				img.addEventListener('load', finish, { once: true });
-				img.addEventListener('error', finish, { once: true });
-			}
-			for (var i = 0; i < images.length; i++) settle(images[i]);
-			setTimeout(reveal, 12000);
-		})();
-	</script>
 </Base>

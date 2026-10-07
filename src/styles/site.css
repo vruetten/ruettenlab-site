@@ -591,6 +591,7 @@ html[data-theme='dark'] .press-grid li.upcoming .press-meta {
 
 .press-figure img {
 	display: block;
+	background: color-mix(in srgb, var(--fg) 6%, transparent);
 	width: 100%;
 	height: auto;
 	max-width: 100%;
