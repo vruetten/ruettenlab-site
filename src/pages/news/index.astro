@@ -125,7 +125,13 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 							<time datetime={item.data.date.toISOString().slice(0, 10)}>
 								{formatDate(item.data.date, item.data.datePrecision)}
 							</time>
-							<span>{item.data.text}</span>
+							{item.data.url ? (
+								<a href={item.data.url} target="_blank" rel="noopener noreferrer">
+									<span>{item.data.text}</span>
+								</a>
+							) : (
+								<span>{item.data.text}</span>
+							)}
 						</li>
 					))}
 				</ul>

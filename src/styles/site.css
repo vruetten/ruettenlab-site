@@ -389,7 +389,8 @@ html[data-theme='dark'] a.soft {
 
 html[data-theme='dark'] .press-meta,
 html[data-theme='dark'] .featured a,
-html[data-theme='dark'] .news-list a {
+html[data-theme='dark'] .news-list a,
+html[data-theme='dark'] .lab-list a {
 	color: var(--fg);
 }
 
@@ -479,13 +480,16 @@ html[data-direction] .stage h1 {
 	align-content: start;
 }
 
-.news-list a {
+.news-list a,
+.lab-list a {
 	justify-self: start;
 	text-decoration-line: none;
 }
 
 .news-list a:hover > span,
-.news-list a:focus-visible > span {
+.news-list a:focus-visible > span,
+.lab-list a:hover > span,
+.lab-list a:focus-visible > span {
 	text-decoration-line: underline;
 }
 

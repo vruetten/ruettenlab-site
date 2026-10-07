@@ -45,6 +45,10 @@ const threads = await getCollection('research');
 											{item.data.text} <span class="join-word">Join!</span>
 										</span>
 									</a>
+								) : item.data.url ? (
+									<a href={item.data.url} target="_blank" rel="noopener noreferrer">
+										<span>{item.data.text}</span>
+									</a>
 								) : (
 									<span>{item.data.text}</span>
 								)
