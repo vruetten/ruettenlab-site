@@ -1,0 +1,803 @@
+<div class="water">
+	<canvas class="water-surface" aria-hidden="true"></canvas>
+</div>
+
+<script>
+	import iconUrl from '../assets/koi-whirl.png?url';
+	const canvas = document.querySelector('canvas.water-surface');
+	// The water runs at every width: on narrow screens it drops below the news.
+	if (canvas instanceof HTMLCanvasElement) startWater(canvas);
+
+	// WATER-BEGIN
+	// Every tunable, with its default. startWater() returns the live copy, so a page can
+	// change a value while the water runs. A function, so it is hoisted above the call.
+	function waterDefaults() {
+		return {
+		ripples: true, // clicks, drags and rain raise waves
+		speed: 0.22, // propagation: how far a ring travels per step, at most 0.5
+		damping: 0.98, // persistence: height kept per step
+		viscosity: 0.05, // how fast crests round off
+		oscillation: 6.5, // crests per drop: the wave-train frequency
+		dropSize: 0.04, // drop radius as a fraction of the panel width
+		dropStrength: 0.5, // height a click adds
+		dragStrength: 0.2, // height a fast drag adds per drop
+		rainEvery: 2.8, // seconds between random drops
+		shading: 2.8, // ring shading gain
+		shine: 0.24, // specular weight of the sheen
+		swell: 1, // amplitude of the slow analytic swell
+		starBrightness: 0.55, // base brightness of the icon's stars
+		starSize: 2.6, // scale of the star sizes: most are one or two pixels
+		glint: 1, // how much a wave slope brightens a star
+		twinkle: 0.28, // depth of the twinkle
+		pushRadius: 0.06, // reach of the cursor's push, as a fraction of panel height
+		pushStrength: 2.2, // impulse the cursor gives a star
+		spring: 9, // pull back home
+		coast: 3.2, // how fast a pushed star slows
+		lensRadius: 0.09, // reach of the cursor's brightening
+		flow: 1, // speed of the resting drift of the stars
+		circling: 0.035, // clockwise drift of the icon's stars about its centre, radians a second
+		};
+	}
+
+	function startWater(canvas, overrides = {}) {
+		const S = Object.assign(waterDefaults(), overrides);
+		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const gl = canvas.getContext('webgl2', {
+			alpha: false,
+			antialias: false,
+			powerPreference: 'low-power',
+		});
+		// The height field lives in half-float textures, so the surface stays continuous:
+		// an 8-bit field quantises the slope into steps that render as hard bands.
+		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return S;
+
+		// The simulated sheet is wider than the visible panel by this fraction on every
+		// side, so rings run out of view and die in the border instead of reflecting.
+		const pad = 0.35;
+		const span = 1 + 2 * pad;
+		const windowOffset = pad / span;
+		const windowScale = 1 / span;
+
+		// Shared by the sheen and the stars: the wave slope at a point of the panel,
+		// from the simulated field plus a slow analytic swell of five travelling waves
+		// whose directions and speeds share no ratio, so they do not tile into a lattice.
+		const slopeGlsl = `
+			uniform sampler2D uField;
+			uniform vec2 uTexel;
+			uniform vec2 uWindow;
+			uniform float uTime;
+			uniform float uAspect;
+			uniform float uSwell;
+			vec2 waveSlope(vec2 panel, float fieldGain) {
+				vec2 uv = uWindow.x + panel * uWindow.y;
+				// Taps one and a half cells out, so the bilinear filter smooths the slope
+				// and a ring's rim stays round instead of stepping along the cells.
+				vec2 o = uTexel * 1.5;
+				float l = texture(uField, uv - vec2(o.x, 0.0)).r;
+				float r = texture(uField, uv + vec2(o.x, 0.0)).r;
+				float d = texture(uField, uv - vec2(0.0, o.y)).r;
+				float u = texture(uField, uv + vec2(0.0, o.y)).r;
+				vec2 grad = vec2(r - l, u - d) * fieldGain;
+				vec2 p = vec2(panel.x * uAspect, panel.y);
+				float t = uTime;
+				vec2 k1 = vec2(19.0, 8.0);
+				vec2 k2 = vec2(-10.0, 17.0);
+				vec2 k3 = vec2(26.0, -15.0);
+				vec2 k4 = vec2(7.0, -23.0);
+				vec2 k5 = vec2(-31.0, -6.0);
+				vec2 swell = k1 * 0.0060 * cos(dot(k1, p) + t * 0.42)
+					+ k2 * 0.0050 * cos(dot(k2, p) - t * 0.31)
+					+ k3 * 0.0026 * cos(dot(k3, p) + t * 0.57)
+					+ k4 * 0.0030 * cos(dot(k4, p) - t * 0.23)
+					+ k5 * 0.0018 * cos(dot(k5, p) + t * 0.36);
+				return grad + swell * uSwell;
+			}
+			// The panel melts into the page on the text side, and softly on the others.
+			float panelFade(vec2 panel) {
+				return smoothstep(0.0, 0.28, panel.x) * smoothstep(1.0, 0.9, panel.x)
+					* smoothstep(0.0, 0.3, panel.y) * smoothstep(1.0, 0.7, panel.y);
+			}`;
+
+		const screenVs = `#version 300 es
+			layout(location = 0) in vec2 a;
+			out vec2 vUv;
+			void main() {
+				vUv = a * 0.5 + 0.5;
+				gl_Position = vec4(a, 0.0, 1.0);
+			}`;
+
+		// One wave-equation step. r holds the height, g the height one step earlier.
+		const simFs = `#version 300 es
+			precision highp float;
+			uniform sampler2D uField;
+			uniform vec2 uTexel;
+			uniform vec4 uDrop;
+			uniform float uSpeed;
+			uniform float uDamping;
+			uniform float uViscosity;
+			uniform float uOscillation;
+			in vec2 vUv;
+			out vec4 o;
+			void main() {
+				vec2 c = texture(uField, vUv).rg;
+				float l = texture(uField, vUv - vec2(uTexel.x, 0.0)).r;
+				float r = texture(uField, vUv + vec2(uTexel.x, 0.0)).r;
+				float d = texture(uField, vUv - vec2(0.0, uTexel.y)).r;
+				float u = texture(uField, vUv + vec2(0.0, uTexel.y)).r;
+				float lap = l + r + d + u - 4.0 * c.r;
+				// The outer fifth of the sheet, all of it out of view, soaks up the waves.
+				vec2 edge = min(vUv, 1.0 - vUv);
+				float sponge = 1.0 - 0.05 * (1.0 - smoothstep(0.0, 0.2, min(edge.x, edge.y)));
+				float h = (2.0 * c.r - c.g + uSpeed * lap) * uDamping * sponge;
+				// Viscosity rounds the crests off, so rings fade to a soft swell.
+				h = mix(h, (l + r + d + u) * 0.25, uViscosity);
+				if (uDrop.w > 0.0) {
+					// A drop is a short wave train, so it spreads as a set of rings rather
+					// than one front.
+					float dist = length((vUv - uDrop.xy) / uTexel) / uDrop.z;
+					float window1 = 1.0 - smoothstep(0.0, 1.0, dist);
+					h += uDrop.w * window1 * window1 * cos(dist * uOscillation);
+				}
+				o = vec4(h, c.r, 0.0, 1.0);
+			}`;
+
+		// The sheen: continuous shading of the surface from its normal, so rings read
+		// as water under the stars.
+		const sheenFs = `#version 300 es
+			precision highp float;
+			${slopeGlsl}
+			uniform float uShading;
+			uniform float uShine;
+			in vec2 vUv;
+			out vec4 o;
+			void main() {
+				vec2 grad = waveSlope(vUv, uShading);
+				vec3 view = vec3(0.0, 0.0, 1.0);
+				vec3 light = normalize(vec3(-0.35, 0.55, 0.75));
+				vec3 half1 = normalize(light + view);
+				vec3 n = normalize(vec3(-grad, 1.0));
+				float spec = pow(max(dot(n, half1), 0.0), 24.0);
+				vec3 refl = reflect(-view, n);
+				// Zero on a flat surface, so still water stays as dark as the page.
+				float sky = max(smoothstep(-0.35, 0.45, refl.y * 0.7 - refl.x * 0.3) - 0.4375, 0.0);
+				float rim = pow(1.0 - max(dot(n, view), 0.0), 2.0);
+				// Blue on one side of the light, amber on the other, drifting slowly.
+				vec3 cool = vec3(0.43, 0.70, 0.96);
+				vec3 warm = vec3(0.98, 0.60, 0.30);
+				float side = refl.x * 0.84 + refl.y * 0.54 + 0.15 * sin(uTime * 0.15);
+				vec3 tint = mix(cool, warm, smoothstep(-0.2, 0.2, side));
+				vec3 glint = mix(vec3(0.64, 0.67, 0.69), tint, 0.7);
+				vec3 deep = vec3(0.043, 0.047, 0.047);
+				float lit = spec * uShine + (sky * 0.07 + rim * 0.12) * (uShine / 0.24);
+				o = vec4(deep + glint * lit * panelFade(vUv), 1.0);
+			}`;
+
+		// The stars: points that sit on the icon, plus a scatter of fainter ones. Each
+		// brightens further when the wave slope under it turns it toward the light.
+		const starVs = `#version 300 es
+			precision highp float;
+			layout(location = 0) in vec2 aPanel;
+			layout(location = 1) in vec2 aFacet;
+			layout(location = 2) in vec4 aSeed;
+			layout(location = 3) in float aKind;
+			layout(location = 4) in float aAlpha;
+			${slopeGlsl}
+			uniform float uRatio;
+			uniform vec2 uPointer;
+			uniform float uStarBrightness;
+			uniform float uStarSize;
+			uniform float uGlint;
+			uniform float uTwinkle;
+			uniform float uLensRadius;
+			out float vBright;
+			out vec3 vColor;
+			out float vDiameter;
+			void main() {
+				vec2 grad = waveSlope(aPanel, 2.5);
+				vec3 n = normalize(vec3(-(grad + aFacet), 1.0));
+				vec3 view = vec3(0.0, 0.0, 1.0);
+				vec3 light = normalize(vec3(-0.12, 0.2, 0.97));
+				vec3 half1 = normalize(light + view);
+				float glint = pow(max(dot(n, half1), 0.0), 80.0) * uGlint;
+				float wake = smoothstep(0.04, 0.35, length(grad)) * uGlint;
+				float twinkle = 1.0 - uTwinkle + uTwinkle * sin(uTime * aSeed.z + aSeed.y);
+				float lens = 1.0 - smoothstep(0.0, max(uLensRadius, 0.001), length((aPanel - uPointer) * vec2(uAspect, 1.0)));
+				float base = mix(0.05, uStarBrightness, aKind);
+				float fade = mix(panelFade(aPanel), 0.85 + 0.15 * panelFade(aPanel), aKind);
+				float bright = (base + glint * (0.6 + 1.0 * wake) + 0.2 * wake * wake) * twinkle * fade;
+				bright *= (1.0 + lens * 0.5) * aAlpha;
+				vBright = bright;
+				// The Astra palette: two blues, two oranges, white, in its proportions.
+				float pick = aSeed.x;
+				vColor = pick < 0.36 ? vec3(0.427, 0.796, 0.957)
+					: pick < 0.52 ? vec3(0.478, 0.694, 0.996)
+					: pick < 0.64 ? vec3(0.973, 0.475, 0.082)
+					: pick < 0.74 ? vec3(0.980, 0.600, 0.298)
+					: vec3(0.961, 0.965, 0.984);
+				// Most stars are a pixel or two; a few are larger, and a lit one grows.
+				float spread = 0.3 + 0.5 * (aSeed.w - 0.5) * (aSeed.w - 0.5);
+				float diameter = uStarSize * spread * mix(0.7, 1.0, aKind)
+					+ (3.0 * glint + 2.0 * wake * wake) * aSeed.w + lens * 1.0;
+				vDiameter = diameter * uRatio;
+				// The sprite is at least four pixels wide so the small-star filter has
+				// room; the star itself stays as small as vDiameter says.
+				gl_PointSize = max(vDiameter, 4.0);
+				gl_Position = vec4(aPanel * 2.0 - 1.0, 0.0, 1.0);
+			}`;
+		const starFs = `#version 300 es
+			precision highp float;
+			in float vBright;
+			in vec3 vColor;
+			in float vDiameter;
+			out vec4 o;
+			// A cubic B-spline footprint two pixels wide: a small star drawn through it
+			// is a sharp point with no halo, whatever the sprite size.
+			float coverage(float x) {
+				x = abs(x);
+				if (x < 1.0) return (4.0 - 6.0 * x * x + 3.0 * x * x * x) / 6.0;
+				float tail = max(2.0 - x, 0.0);
+				return tail * tail * tail / 6.0;
+			}
+			void main() {
+				float sprite = max(vDiameter, 4.0);
+				vec2 pixel = (gl_PointCoord - 0.5) * sprite;
+				float dia = max(vDiameter, 0.0001);
+				vec2 point = pixel * 2.0 / dia;
+				float dist = length(point);
+				float disc = 1.0 - smoothstep(0.22, 1.0, dist);
+				float small = coverage(pixel.x) * coverage(pixel.y) * 0.256 * dia * dia;
+				float core = mix(small, pow(disc, 1.5), smoothstep(2.0, 4.0, dia));
+				// The brightest large stars grow a four-ray flare.
+				float rayX = exp(-abs(point.y) * 28.0) * (1.0 - smoothstep(0.18, 1.0, abs(point.x)));
+				float rayY = exp(-abs(point.x) * 28.0) * (1.0 - smoothstep(0.18, 1.0, abs(point.y)));
+				float rays = max(rayX, rayY) * 0.28 * smoothstep(0.9, 1.8, vBright) * smoothstep(3.0, 5.0, dia);
+				float alpha = max(core, rays) * vBright;
+				if (alpha <= 0.0) discard;
+				float whiteCore = core * smoothstep(0.9, 2.2, vBright) * 0.82;
+				vec3 colour = mix(vColor, vec3(1.0), whiteCore);
+				o = vec4(colour * alpha, 1.0);
+			}`;
+
+		function compile(type, source) {
+			const shader = gl.createShader(type);
+			gl.shaderSource(shader, source);
+			gl.compileShader(shader);
+			if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+				throw new Error(gl.getShaderInfoLog(shader) || 'shader');
+			}
+			return shader;
+		}
+		function program(vertex, fragment) {
+			const p = gl.createProgram();
+			gl.attachShader(p, compile(gl.VERTEX_SHADER, vertex));
+			gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fragment));
+			gl.linkProgram(p);
+			if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+				throw new Error(gl.getProgramInfoLog(p) || 'program');
+			}
+			return p;
+		}
+		let sim;
+		let sheen;
+		let stars;
+		try {
+			sim = program(screenVs, simFs);
+			sheen = program(screenVs, sheenFs);
+			stars = program(starVs, starFs);
+		} catch (error) {
+			console.error('water shader', error);
+			return S;
+		}
+		const locate = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
+		const simLoc = locate(sim, ['uField', 'uTexel', 'uDrop', 'uSpeed', 'uDamping', 'uViscosity', 'uOscillation']);
+		const slopeNames = ['uField', 'uTexel', 'uWindow', 'uTime', 'uAspect', 'uSwell'];
+		const sheenLoc = locate(sheen, [...slopeNames, 'uShading', 'uShine']);
+		const starLoc = locate(stars, [...slopeNames, 'uRatio', 'uPointer', 'uStarBrightness', 'uStarSize', 'uGlint', 'uTwinkle', 'uLensRadius']);
+
+		// One triangle that covers the screen, for the simulation and the sheen.
+		const screenVao = gl.createVertexArray();
+		gl.bindVertexArray(screenVao);
+		const screenBuffer = gl.createBuffer();
+		gl.bindBuffer(gl.ARRAY_BUFFER, screenBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+		gl.enableVertexAttribArray(0);
+		gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+		gl.bindVertexArray(null);
+
+		// The icon the stars sit on: two koi as yin and yang around a spiral orbit, with
+		// four nodes, white on black. It loads once; the stars are rebuilt when it lands.
+		const icon = new Image();
+		let iconReady = false;
+		icon.onload = () => {
+			iconReady = true;
+			if (lastSize) makeStars(lastSize[0], lastSize[1]);
+		};
+		icon.src = iconUrl;
+
+		// Where the icon's stars sit. The icon is drawn centred on a 2D canvas whose
+		// pixels are square on screen, at 0.9 of the panel's height or width, whichever
+		// binds; a pixel brighter than mid grey is ink, so the grey halo around the
+		// filled fish is not. Ink within a few pixels of the dark is edge ink, which
+		// holds the outlines, the whirl's lines, the nodes and the rim of the filled
+		// fish; ink deeper inside the filled fish gets stars at a quarter of the density.
+		// Pixels of a small separate piece of ink, under 2% of all ink (the four nodes),
+		// are listed twice, so the nodes get stars at twice the density of the lines.
+		function sampleIcon(count, aspect) {
+			const width = 900;
+			const height = Math.max(64, Math.round(width / aspect));
+			const sheet = document.createElement('canvas');
+			sheet.width = width;
+			sheet.height = height;
+			const ctx = sheet.getContext('2d', { willReadFrequently: true });
+			if (!ctx || !iconReady) return null;
+			const fit = 0.9 * Math.min(width / icon.naturalWidth, height / icon.naturalHeight);
+			const w = icon.naturalWidth * fit;
+			const h = icon.naturalHeight * fit;
+			ctx.fillStyle = '#000';
+			ctx.fillRect(0, 0, width, height);
+			ctx.drawImage(icon, (width - w) / 2, (height - h) / 2, w, h);
+			const data = ctx.getImageData(0, 0, width, height).data;
+			const mask = new Uint8Array(width * height);
+			for (let i = 0; i < width * height; i++) {
+				const lum = (data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2]) / 3;
+				if (lum > 140) mask[i] = 1;
+			}
+			// The size of each connected piece of ink, by flood fill.
+			const piece = new Int32Array(width * height).fill(-1);
+			const pieceSize = [];
+			let inkTotal = 0;
+			for (let start = 0; start < width * height; start++) {
+				if (mask[start] !== 1 || piece[start] !== -1) continue;
+				const id = pieceSize.length;
+				const stack = [start];
+				piece[start] = id;
+				let size = 0;
+				while (stack.length > 0) {
+					const at = stack.pop();
+					size++;
+					const x = at % width;
+					const next = [x > 0 ? at - 1 : -1, x < width - 1 ? at + 1 : -1, at - width, at + width];
+					for (const n of next) {
+						if (n >= 0 && n < width * height && mask[n] === 1 && piece[n] === -1) {
+							piece[n] = id;
+							stack.push(n);
+						}
+					}
+				}
+				pieceSize.push(size);
+				inkTotal += size;
+			}
+			// A pixel is deep when ink reaches this far in all eight directions.
+			const reach = Math.max(3, Math.round(width * 0.008));
+			const ink = (x, y) => x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] === 1;
+			const edge = [];
+			const deep = [];
+			for (let y = 0; y < height; y++) {
+				for (let x = 0; x < width; x++) {
+					if (mask[y * width + x] !== 1) continue;
+					const inner = ink(x - reach, y) && ink(x + reach, y) && ink(x, y - reach) && ink(x, y + reach)
+						&& ink(x - reach, y - reach) && ink(x + reach, y + reach) && ink(x - reach, y + reach) && ink(x + reach, y - reach);
+					(inner ? deep : edge).push(x, y);
+					if (!inner && pieceSize[piece[y * width + x]] < inkTotal * 0.02) edge.push(x, y);
+				}
+			}
+			const deepWeight = deep.length / 4;
+			const shape = {
+				mask, width, height, edge, deep,
+				cx: width / 2, cy: height / 2,
+				deepShare: deepWeight / (deepWeight + edge.length),
+				points: [],
+			};
+			if (edge.length + deep.length === 0) return null;
+			for (let i = 0; i < count; i++) shape.points.push(...iconPoint(shape));
+			return shape;
+		}
+		let glyph = null;
+		// Whether a point of the mask, in its pixels with y down, lies on the icon's ink.
+		function inkAt(px, py) {
+			if (!glyph) return false;
+			const x = Math.floor(px);
+			const y = Math.floor(py);
+			if (x < 0 || y < 0 || x >= glyph.width || y >= glyph.height) return false;
+			return glyph.mask[y * glyph.width + x] === 1;
+		}
+		// A random point of the icon's ink, edge or deep in their shares, in panel
+		// coordinates.
+		function iconPoint(shape) {
+			const list = shape.deep.length > 0 && Math.random() < shape.deepShare ? shape.deep : shape.edge;
+			const pick = Math.floor(Math.random() * (list.length / 2)) * 2;
+			return [(list[pick] + Math.random()) / shape.width, 1 - (list[pick + 1] + Math.random()) / shape.height];
+		}
+
+		// The stars: the icon's points plus a scatter of background ones. Each has a home
+		// in the panel, an offset and a velocity for the cursor to push, a fixed facet
+		// tilt, a colour pick, a twinkle phase and rate, and a size.
+		const starVao = gl.createVertexArray();
+		const starBuffers = [gl.createBuffer(), gl.createBuffer(), gl.createBuffer(), gl.createBuffer(), gl.createBuffer()];
+		let starCount = 0;
+		let iconStars = 0;
+		let lastSize = null;
+		let home = new Float32Array(0);
+		let position = new Float32Array(0);
+		let offset = new Float32Array(0);
+		let velocity = new Float32Array(0);
+		let alpha = new Float32Array(0);
+		let fading = new Int8Array(0);
+		function makeStars(widthPx, heightPx) {
+			lastSize = [widthPx, heightPx];
+			const iconCount = Math.round(Math.min(5000, Math.max(2200, widthPx * 6.5)));
+			const scatterCount = Math.round(widthPx * heightPx / 480);
+			glyph = sampleIcon(iconCount, widthPx / heightPx);
+			const iconPoints = glyph ? glyph.points : [];
+			iconStars = iconPoints.length / 2;
+			starCount = iconStars + scatterCount;
+			home = new Float32Array(starCount * 2);
+			position = new Float32Array(starCount * 2);
+			offset = new Float32Array(starCount * 2);
+			velocity = new Float32Array(starCount * 2);
+			alpha = new Float32Array(starCount);
+			fading = new Int8Array(starCount);
+			const facet = new Float32Array(starCount * 2);
+			const seed = new Float32Array(starCount * 4);
+			const kind = new Float32Array(starCount);
+			for (let i = 0; i < starCount; i++) {
+				const onIconStar = i < iconStars;
+				home[i * 2] = onIconStar ? iconPoints[i * 2] : Math.random();
+				home[i * 2 + 1] = onIconStar ? iconPoints[i * 2 + 1] : Math.random();
+				kind[i] = onIconStar ? 1 : 0;
+				alpha[i] = 1;
+				fading[i] = 1;
+				const angle = Math.random() * Math.PI * 2;
+				const tilt = Math.sqrt(Math.random()) * 0.42;
+				facet[i * 2] = Math.cos(angle) * tilt;
+				facet[i * 2 + 1] = Math.sin(angle) * tilt;
+				seed[i * 4] = Math.random();
+				seed[i * 4 + 1] = Math.random() * Math.PI * 2;
+				seed[i * 4 + 2] = 1.5 + Math.random() * 3.5;
+				seed[i * 4 + 3] = 0.5 + Math.random() * Math.random() * 1.5;
+			}
+			position.set(home);
+			gl.bindVertexArray(starVao);
+			const layout = [[0, position, 2, gl.DYNAMIC_DRAW], [1, facet, 2, gl.STATIC_DRAW], [2, seed, 4, gl.STATIC_DRAW], [3, kind, 1, gl.STATIC_DRAW], [4, alpha, 1, gl.DYNAMIC_DRAW]];
+			for (const [index, data, size, usage] of layout) {
+				gl.bindBuffer(gl.ARRAY_BUFFER, starBuffers[index]);
+				gl.bufferData(gl.ARRAY_BUFFER, data, usage);
+				gl.enableVertexAttribArray(index);
+				gl.vertexAttribPointer(index, size, gl.FLOAT, false, 0, 0);
+			}
+			gl.bindVertexArray(null);
+		}
+
+		// The cursor pushes stars the way Astra's does: an impulse along the pointer's
+		// motion for stars near the segment it just crossed, then the stars coast,
+		// and a spring brings each back to its home so the icon mends itself.
+		const pointer = { x: -10, y: -10, px: -10, py: -10, inside: false };
+		// The resting drift. Each icon star's home circles the icon's centre clockwise,
+		// the way the two koi swim, at S.circling radians a second scaled by S.flow, with
+		// a slow radial wander. A home that steps off the ink is moved up to three mask
+		// pixels inward or outward to the nearest ink, so stars on a thin line that runs
+		// round the centre slide along the line; a star whose home finds no ink within
+		// that reach fades out, to fade back in at a fresh point of the icon. Background stars swirl across the panel
+		// and wrap.
+		function driftHomes(dt, seconds) {
+			const speed = Math.max(0, S.flow) * dt;
+			if (speed <= 0) return;
+			const t = seconds;
+			for (let i = 0; i < starCount; i++) {
+				const ix = i * 2;
+				const iy = ix + 1;
+				const u = home[ix];
+				const v = home[iy];
+				const phase = seed4(i) * 6.2832;
+				if (i < iconStars) {
+					// In the mask's pixels, about the icon's centre, y down, where a
+					// growing angle turns clockwise on screen.
+					const dx = u * glyph.width - glyph.cx;
+					const dy = (1 - v) * glyph.height - glyph.cy;
+					const angle = S.circling * (1 + 0.5 * Math.sin(t * 0.37 + phase)) * speed;
+					const scale = 1 + 0.01 * Math.sin(t * 0.61 + phase) * speed;
+					const c = Math.cos(angle) * scale;
+					const s = Math.sin(angle) * scale;
+					let nx = glyph.cx + dx * c - dy * s;
+					let ny = glyph.cy + dx * s + dy * c;
+					let on = inkAt(nx, ny);
+					if (!on && fading[i] === 1) {
+						const r = Math.hypot(nx - glyph.cx, ny - glyph.cy) || 1;
+						const rx = (nx - glyph.cx) / r;
+						const ry = (ny - glyph.cy) / r;
+						for (const k of [1, -1, 2, -2, 3, -3]) {
+							if (inkAt(nx + rx * k, ny + ry * k)) {
+								nx += rx * k;
+								ny += ry * k;
+								on = true;
+								break;
+							}
+						}
+					}
+					home[ix] = nx / glyph.width;
+					home[iy] = 1 - ny / glyph.height;
+					if (fading[i] === 1 && !on) fading[i] = -1;
+					if (fading[i] === -1) {
+						alpha[i] = Math.max(0, alpha[i] - dt * 2.5);
+						if (alpha[i] === 0) {
+							const fresh = iconPoint(glyph);
+							home[ix] = fresh[0];
+							home[iy] = fresh[1];
+							offset[ix] = 0;
+							offset[iy] = 0;
+							fading[i] = 1;
+						}
+					} else {
+						alpha[i] = Math.min(1, alpha[i] + dt * 1.2);
+					}
+				} else {
+					// A slow swirl across the panel.
+					const cx = u - 0.5;
+					const cy = v - 0.5;
+					const swirl = 0.03 + 0.02 * Math.sin(t * 0.2 + phase);
+					home[ix] = u + (-cy * swirl + 0.012 * Math.sin(t * 0.23 + phase)) * speed;
+					home[iy] = v + (cx * swirl * 1.4 + 0.012 * Math.cos(t * 0.19 + phase)) * speed;
+					if (home[ix] < -0.05) home[ix] += 1.1;
+					if (home[ix] > 1.05) home[ix] -= 1.1;
+					if (home[iy] < -0.05) home[iy] += 1.1;
+					if (home[iy] > 1.05) home[iy] -= 1.1;
+					alpha[i] = 1;
+				}
+			}
+		}
+		function moveStars(dt, aspect) {
+			const seg = [pointer.x - pointer.px, pointer.y - pointer.py];
+			const segLen2 = (seg[0] * aspect) ** 2 + seg[1] ** 2;
+			const radius = S.pushRadius;
+			const push = pointer.inside && segLen2 > 0 && radius > 0;
+			const spring = S.spring;
+			const drag = Math.exp(-dt * S.coast);
+			const strength = S.pushStrength;
+			for (let i = 0; i < starCount; i++) {
+				const ix = i * 2;
+				const iy = ix + 1;
+				let vx = velocity[ix];
+				let vy = velocity[iy];
+				if (push) {
+					// Distance from the star to the pointer's segment, in a frame where a
+					// unit is the panel height, so pushes are round on screen.
+					const rx = (position[ix] - pointer.px) * aspect;
+					const ry = position[iy] - pointer.py;
+					const t = Math.max(0, Math.min(1, (rx * seg[0] * aspect + ry * seg[1]) / segLen2));
+					const dx = rx - seg[0] * aspect * t;
+					const dy = ry - seg[1] * t;
+					const dist = Math.hypot(dx, dy);
+					if (dist < radius) {
+						const weight = (1 - dist / radius) ** 2;
+						const mass = 0.7 + seed4(i) * 0.9;
+						vx += (seg[0] * strength + dx / aspect * strength * 0.4) * weight / mass;
+						vy += (seg[1] * strength + dy * strength * 0.4) * weight / mass;
+					}
+				}
+				const ox = offset[ix];
+				const oy = offset[iy];
+				vx = (vx - ox * spring * dt) * drag;
+				vy = (vy - oy * spring * dt) * drag;
+				const speed = Math.hypot(vx * aspect, vy);
+				if (speed > 0.5) {
+					vx *= 0.5 / speed;
+					vy *= 0.5 / speed;
+				}
+				velocity[ix] = vx;
+				velocity[iy] = vy;
+				offset[ix] = ox + vx * dt;
+				offset[iy] = oy + vy * dt;
+				position[ix] = home[ix] + offset[ix];
+				position[iy] = home[iy] + offset[iy];
+			}
+			pointer.px = pointer.x;
+			pointer.py = pointer.y;
+			gl.bindBuffer(gl.ARRAY_BUFFER, starBuffers[0]);
+			gl.bufferSubData(gl.ARRAY_BUFFER, 0, position);
+			gl.bindBuffer(gl.ARRAY_BUFFER, starBuffers[4]);
+			gl.bufferSubData(gl.ARRAY_BUFFER, 0, alpha);
+		}
+		// A cheap per-star constant in [0, 1), from the star's index.
+		function seed4(i) {
+			const x = Math.sin(i * 12.9898) * 43758.5453;
+			return x - Math.floor(x);
+		}
+
+		// Two half-float fields, swapped every step.
+		let cols = 0;
+		let rows = 0;
+		const fields = [];
+		function makeField() {
+			const texture = gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D, texture);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, cols, rows, 0, gl.RGBA, gl.HALF_FLOAT, null);
+			const framebuffer = gl.createFramebuffer();
+			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+			gl.clearColor(0, 0, 0, 1);
+			gl.clear(gl.COLOR_BUFFER_BIT);
+			return { texture, framebuffer };
+		}
+		let ratio = 1;
+		let panelWidth = 1;
+		function resize() {
+			const rect = canvas.getBoundingClientRect();
+			ratio = Math.min(window.devicePixelRatio || 1, 3);
+			panelWidth = rect.width;
+			const width = Math.max(1, Math.round(rect.width * ratio));
+			const height = Math.max(1, Math.round(rect.height * ratio));
+			if (canvas.width !== width || canvas.height !== height) {
+				canvas.width = width;
+				canvas.height = height;
+			}
+			const nextCols = Math.max(2, Math.round(rect.width * span * 0.8));
+			const nextRows = Math.max(2, Math.round(rect.height * span * 0.8));
+			if (nextCols !== cols || nextRows !== rows) {
+				cols = nextCols;
+				rows = nextRows;
+				for (const field of fields.splice(0)) {
+					gl.deleteTexture(field.texture);
+					gl.deleteFramebuffer(field.framebuffer);
+				}
+				fields.push(makeField(), makeField());
+				makeStars(rect.width, rect.height);
+			}
+		}
+		// A drop's radius in field cells, from the panel width, so a ring is the same
+		// fraction of the panel at any size.
+		function dropRadius() {
+			return Math.max(6, panelWidth * 0.8 * S.dropSize);
+		}
+
+		// Drops queue up and enter the field one per simulation step. Positions are in
+		// panel coordinates and map into the middle of the sheet.
+		const drops = [];
+		function drop(u, v, radius, mag) {
+			if (!S.ripples || mag <= 0) return;
+			drops.push([windowOffset + u * windowScale, windowOffset + v * windowScale, radius, mag]);
+		}
+		function panelPoint(event) {
+			const rect = canvas.getBoundingClientRect();
+			if (rect.width === 0 || rect.height === 0) return null;
+			return [(event.clientX - rect.left) / rect.width, 1 - (event.clientY - rect.top) / rect.height];
+		}
+		function place(event, mag, radius) {
+			const at = panelPoint(event);
+			if (!at || at[0] < 0 || at[1] < 0 || at[0] > 1 || at[1] > 1) return;
+			drop(at[0], at[1], radius, mag);
+		}
+		let last = null;
+		canvas.addEventListener('pointerdown', (event) => {
+			place(event, S.dropStrength, dropRadius());
+			last = [event.clientX, event.clientY];
+		});
+		canvas.addEventListener('pointermove', (event) => {
+			const at = panelPoint(event);
+			if (at) {
+				if (!pointer.inside) {
+					pointer.px = at[0];
+					pointer.py = at[1];
+				}
+				pointer.x = at[0];
+				pointer.y = at[1];
+				pointer.inside = true;
+			}
+			if (!last) {
+				last = [event.clientX, event.clientY];
+				return;
+			}
+			const moved = Math.hypot(event.clientX - last[0], event.clientY - last[1]);
+			if (moved < 3) return;
+			last = [event.clientX, event.clientY];
+			place(event, Math.min(S.dragStrength, moved * S.dragStrength * 0.1), dropRadius() * 0.6);
+		});
+		canvas.addEventListener('pointerleave', () => {
+			last = null;
+			pointer.inside = false;
+			pointer.x = -10;
+			pointer.y = -10;
+			pointer.px = -10;
+			pointer.py = -10;
+		});
+
+		// A random drop every few seconds keeps rings crossing the surface when nobody is
+		// pointing at the water. Some land just outside the panel, so rings also arrive
+		// from beyond its edges.
+		let nextRain = 800;
+		function rain(elapsed) {
+			if (elapsed < nextRain) return;
+			nextRain = elapsed + S.rainEvery * 1000 * (0.6 + Math.random() * 0.8);
+			drop(-0.2 + Math.random() * 1.4, -0.2 + Math.random() * 1.4, dropRadius(), S.dropStrength * (0.6 + Math.random() * 0.4));
+		}
+
+		function step() {
+			const [from, to] = fields;
+			gl.useProgram(sim);
+			gl.bindVertexArray(screenVao);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, to.framebuffer);
+			gl.viewport(0, 0, cols, rows);
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, from.texture);
+			gl.uniform1i(simLoc.uField, 0);
+			gl.uniform2f(simLoc.uTexel, 1 / cols, 1 / rows);
+			gl.uniform1f(simLoc.uSpeed, Math.min(0.5, Math.max(0, S.speed)));
+			gl.uniform1f(simLoc.uDamping, Math.min(1, Math.max(0, S.damping)));
+			gl.uniform1f(simLoc.uViscosity, Math.min(0.5, Math.max(0, S.viscosity)));
+			gl.uniform1f(simLoc.uOscillation, S.oscillation);
+			const next = drops.shift();
+			if (next) gl.uniform4f(simLoc.uDrop, next[0], next[1], next[2], next[3]);
+			else gl.uniform4f(simLoc.uDrop, 0, 0, 1, 0);
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
+			fields.reverse();
+		}
+
+		function setSlopeUniforms(loc, seconds) {
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, fields[0].texture);
+			gl.uniform1i(loc.uField, 0);
+			gl.uniform2f(loc.uTexel, 1 / cols, 1 / rows);
+			gl.uniform2f(loc.uWindow, windowOffset, windowScale);
+			gl.uniform1f(loc.uTime, seconds);
+			gl.uniform1f(loc.uAspect, canvas.width / canvas.height);
+			gl.uniform1f(loc.uSwell, S.swell);
+		}
+
+		// The wave advances 120 steps a second whatever the display's refresh rate.
+		const stepMs = 1000 / 120;
+		const started = performance.now();
+		let stepped = 0;
+		let lastFrame = started;
+		function frame(now) {
+			requestAnimationFrame(frame);
+			if (document.hidden) return;
+			resize();
+			const elapsed = now - started;
+			const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+			lastFrame = now;
+			rain(elapsed);
+
+			// The simulation writes whole values: blending must be off here, or each
+			// step adds onto the last and the field runs away within a second.
+			gl.disable(gl.BLEND);
+			const due = Math.min(4, Math.floor(elapsed / stepMs) - stepped);
+			for (let i = 0; i < due; i++) step();
+			stepped = Math.floor(elapsed / stepMs);
+
+			const aspect = canvas.width / canvas.height;
+			driftHomes(dt, elapsed / 1000);
+			moveStars(dt, aspect);
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			gl.viewport(0, 0, canvas.width, canvas.height);
+			gl.useProgram(sheen);
+			gl.bindVertexArray(screenVao);
+			setSlopeUniforms(sheenLoc, elapsed / 1000);
+			gl.uniform1f(sheenLoc.uShading, S.shading);
+			gl.uniform1f(sheenLoc.uShine, S.shine);
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+			gl.enable(gl.BLEND);
+			gl.blendFunc(gl.ONE, gl.ONE);
+			gl.useProgram(stars);
+			gl.bindVertexArray(starVao);
+			setSlopeUniforms(starLoc, elapsed / 1000);
+			gl.uniform1f(starLoc.uRatio, ratio);
+			gl.uniform2f(starLoc.uPointer, pointer.x, pointer.y);
+			gl.uniform1f(starLoc.uStarBrightness, S.starBrightness);
+			gl.uniform1f(starLoc.uStarSize, S.starSize);
+			gl.uniform1f(starLoc.uGlint, S.glint);
+			gl.uniform1f(starLoc.uTwinkle, S.twinkle);
+			gl.uniform1f(starLoc.uLensRadius, S.lensRadius);
+			gl.drawArrays(gl.POINTS, 0, starCount);
+			gl.bindVertexArray(null);
+			gl.disable(gl.BLEND);
+		}
+		requestAnimationFrame(frame);
+		return S;
+	}
+	// WATER-END
+</script>

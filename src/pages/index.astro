@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import WaterSurface from '../components/WaterSurface.astro';
 import Base from '../layouts/Base.astro';
 import { formatDate, isUpcoming, labName, siteHref } from '../site';
 
@@ -19,11 +20,11 @@ const threads = await getCollection('research');
 <Base>
 	<p class="volume">No volume yet</p>
 	<div class="stage">
-		<div>
+		<div class="stage-lead">
 			<h1>{labName}</h1>
 			{threads[0]?.data.summary && <p class="sentence">{threads[0].data.summary}</p>}
 		</div>
-		<div>
+		<div class="stage-news">
 			<p>
 				<a class="news-label" href={siteHref('news/')}>News</a>
 			</p>
@@ -58,5 +59,6 @@ const threads = await getCollection('research');
 				}
 			</ul>
 		</div>
+		<WaterSurface />
 	</div>
 </Base>

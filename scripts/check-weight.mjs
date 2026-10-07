@@ -21,7 +21,10 @@ async function htmlFiles(dir) {
 	return found;
 }
 
+// Pages that move may ship JavaScript: the research threads, and the home page, which
+// runs the water.
 function allowsScript(rel) {
+	if (rel === 'index.html') return true;
 	return rel.startsWith(`research${path.sep}`) && rel !== path.join('research', 'index.html');
 }
 

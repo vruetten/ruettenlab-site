@@ -444,6 +444,40 @@ html[data-theme='dark'] .news-list a.join .join-word {
 	padding-block: clamp(1.5rem, 6vh, 3.5rem) clamp(2rem, 6vh, 4rem);
 }
 
+/* Below the two-column width the water drops under the news list, full bleed, so the
+   icon keeps its own space instead of sharing it with the text. */
+.water {
+	position: relative;
+	min-height: min(32rem, 85vw);
+	margin-inline: calc(-1 * var(--inset));
+	background: var(--bg);
+	touch-action: pan-y;
+}
+
+.water canvas {
+	position: absolute;
+	inset: 0;
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+@media (min-width: 960px) {
+	.stage {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		column-gap: clamp(1.5rem, 3vw, 3rem);
+		align-items: stretch;
+	}
+
+	/* The water fills the right half of the screen, out to the viewport edge. */
+	.water {
+		grid-column: 2;
+		grid-row: 1 / span 2;
+		min-height: min(38rem, 70vh);
+		margin-left: 0;
+	}
+}
+
 html[data-direction] .stage h1 {
 	margin-bottom: 0.55em;
 }
