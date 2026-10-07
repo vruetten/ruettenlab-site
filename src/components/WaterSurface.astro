@@ -5,14 +5,8 @@
 <script>
 	import iconUrl from '../assets/koi-whirl.png?url';
 	const canvas = document.querySelector('canvas.water-surface');
-	const wide = window.matchMedia('(min-width: 960px)');
-	if (canvas instanceof HTMLCanvasElement && wide.matches) startWater(canvas);
-	else wide.addEventListener('change', () => {
-		if (wide.matches && canvas instanceof HTMLCanvasElement && !canvas.dataset.water) {
-			canvas.dataset.water = 'on';
-			startWater(canvas);
-		}
-	});
+	// The water runs at every width: on narrow screens it drops below the news.
+	if (canvas instanceof HTMLCanvasElement) startWater(canvas);
 
 	// WATER-BEGIN
 	// Every tunable, with its default. startWater() returns the live copy, so a page can
