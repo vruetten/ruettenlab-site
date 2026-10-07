@@ -12,7 +12,7 @@ const news = (await getCollection('news'))
 		return label(a).localeCompare(label(b));
 	})
 	.filter((item) => item.data.size !== 'small')
-	.slice(0, 5);
+	.slice(0, 10);
 const threads = await getCollection('research');
 ---
 
