@@ -3,6 +3,7 @@
 </div>
 
 <script>
+	import iconUrl from '../assets/koi-whirl.png?url';
 	const canvas = document.querySelector('canvas.water-surface');
 	const wide = window.matchMedia('(min-width: 960px)');
 	if (canvas instanceof HTMLCanvasElement && wide.matches) startWater(canvas);
@@ -30,7 +31,7 @@
 		shading: 2.8, // ring shading gain
 		shine: 0.24, // specular weight of the sheen
 		swell: 1, // amplitude of the slow analytic swell
-		starBrightness: 0.55, // base brightness of the word's stars
+		starBrightness: 0.55, // base brightness of the icon's stars
 		starSize: 2.6, // scale of the star sizes: most are one or two pixels
 		glint: 1, // how much a wave slope brightens a star
 		twinkle: 0.28, // depth of the twinkle
@@ -40,6 +41,7 @@
 		coast: 3.2, // how fast a pushed star slows
 		lensRadius: 0.09, // reach of the cursor's brightening
 		flow: 1, // speed of the resting drift of the stars
+		circling: 0.035, // clockwise drift of the icon's stars about its centre, radians a second
 		};
 	}
 
@@ -54,8 +56,6 @@
 		// The height field lives in half-float textures, so the surface stays continuous:
 		// an 8-bit field quantises the slope into steps that render as hard bands.
 		if (!gl || reduce || !gl.getExtension('EXT_color_buffer_float')) return S;
-
-		const word = 'WHOLISTIC';
 
 		// The simulated sheet is wider than the visible panel by this fraction on every
 		// side, so rings run out of view and die in the border instead of reflecting.
@@ -178,7 +178,7 @@
 				o = vec4(deep + glint * lit * panelFade(vUv), 1.0);
 			}`;
 
-		// The stars: points that spell the word, plus a scatter of fainter ones. Each
+		// The stars: points that sit on the icon, plus a scatter of fainter ones. Each
 		// brightens further when the wave slope under it turns it toward the light.
 		const starVs = `#version 300 es
 			precision highp float;
@@ -310,66 +310,119 @@
 		gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 		gl.bindVertexArray(null);
 
-		// Where the word's stars sit: points sampled from the glyphs drawn on a 2D canvas,
-		// in panel coordinates with y up.
-		function sampleWord(count, aspect) {
-			const width = 640;
+		// The icon the stars sit on: two koi as yin and yang around a spiral orbit, with
+		// four nodes, white on black. It loads once; the stars are rebuilt when it lands.
+		const icon = new Image();
+		let iconReady = false;
+		icon.onload = () => {
+			iconReady = true;
+			if (lastSize) makeStars(lastSize[0], lastSize[1]);
+		};
+		icon.src = iconUrl;
+
+		// Where the icon's stars sit. The icon is drawn centred on a 2D canvas whose
+		// pixels are square on screen, at 0.9 of the panel's height or width, whichever
+		// binds; a pixel brighter than mid grey is ink, so the grey halo around the
+		// filled fish is not. Ink within a few pixels of the dark is edge ink, which
+		// holds the outlines, the whirl's lines, the nodes and the rim of the filled
+		// fish; ink deeper inside the filled fish gets stars at a quarter of the density.
+		// Pixels of a small separate piece of ink, under 2% of all ink (the four nodes),
+		// are listed twice, so the nodes get stars at twice the density of the lines.
+		function sampleIcon(count, aspect) {
+			const width = 900;
 			const height = Math.max(64, Math.round(width / aspect));
 			const sheet = document.createElement('canvas');
 			sheet.width = width;
 			sheet.height = height;
-			const ctx = sheet.getContext('2d');
-			if (!ctx) return [];
-			const family = 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
-			ctx.font = `600 100px ${family}`;
-			const measured = ctx.measureText(word).width;
-			const size = Math.min(100 * (width * 0.84) / measured, height * 0.5);
-			ctx.font = `600 ${size}px ${family}`;
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.fillStyle = '#fff';
-			ctx.fillText(word, width / 2, height * 0.5);
+			const ctx = sheet.getContext('2d', { willReadFrequently: true });
+			if (!ctx || !iconReady) return null;
+			const fit = 0.9 * Math.min(width / icon.naturalWidth, height / icon.naturalHeight);
+			const w = icon.naturalWidth * fit;
+			const h = icon.naturalHeight * fit;
+			ctx.fillStyle = '#000';
+			ctx.fillRect(0, 0, width, height);
+			ctx.drawImage(icon, (width - w) / 2, (height - h) / 2, w, h);
 			const data = ctx.getImageData(0, 0, width, height).data;
 			const mask = new Uint8Array(width * height);
-			const inside = [];
-			for (let y = 0; y < height; y++) {
-				for (let x = 0; x < width; x++) {
-					if (data[(y * width + x) * 4 + 3] > 128) {
-						mask[y * width + x] = 1;
-						inside.push(x, y);
+			for (let i = 0; i < width * height; i++) {
+				const lum = (data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2]) / 3;
+				if (lum > 140) mask[i] = 1;
+			}
+			// The size of each connected piece of ink, by flood fill.
+			const piece = new Int32Array(width * height).fill(-1);
+			const pieceSize = [];
+			let inkTotal = 0;
+			for (let start = 0; start < width * height; start++) {
+				if (mask[start] !== 1 || piece[start] !== -1) continue;
+				const id = pieceSize.length;
+				const stack = [start];
+				piece[start] = id;
+				let size = 0;
+				while (stack.length > 0) {
+					const at = stack.pop();
+					size++;
+					const x = at % width;
+					const next = [x > 0 ? at - 1 : -1, x < width - 1 ? at + 1 : -1, at - width, at + width];
+					for (const n of next) {
+						if (n >= 0 && n < width * height && mask[n] === 1 && piece[n] === -1) {
+							piece[n] = id;
+							stack.push(n);
+						}
 					}
 				}
+				pieceSize.push(size);
+				inkTotal += size;
 			}
-			const points = [];
-			for (let i = 0; i < count && inside.length > 0; i++) {
-				const pick = Math.floor(Math.random() * (inside.length / 2)) * 2;
-				points.push((inside[pick] + Math.random()) / width, 1 - (inside[pick + 1] + Math.random()) / height);
+			// A pixel is deep when ink reaches this far in all eight directions.
+			const reach = Math.max(3, Math.round(width * 0.008));
+			const ink = (x, y) => x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] === 1;
+			const edge = [];
+			const deep = [];
+			for (let y = 0; y < height; y++) {
+				for (let x = 0; x < width; x++) {
+					if (mask[y * width + x] !== 1) continue;
+					const inner = ink(x - reach, y) && ink(x + reach, y) && ink(x, y - reach) && ink(x, y + reach)
+						&& ink(x - reach, y - reach) && ink(x + reach, y + reach) && ink(x - reach, y + reach) && ink(x + reach, y - reach);
+					(inner ? deep : edge).push(x, y);
+					if (!inner && pieceSize[piece[y * width + x]] < inkTotal * 0.02) edge.push(x, y);
+				}
 			}
-			return { points, mask, width, height, inside };
+			const deepWeight = deep.length / 4;
+			const shape = {
+				mask, width, height, edge, deep,
+				cx: width / 2, cy: height / 2,
+				deepShare: deepWeight / (deepWeight + edge.length),
+				points: [],
+			};
+			if (edge.length + deep.length === 0) return null;
+			for (let i = 0; i < count; i++) shape.points.push(...iconPoint(shape));
+			return shape;
 		}
-		// Whether a panel point lies on a letter.
 		let glyph = null;
-		function onLetter(u, v) {
+		// Whether a point of the mask, in its pixels with y down, lies on the icon's ink.
+		function inkAt(px, py) {
 			if (!glyph) return false;
-			const x = Math.floor(u * glyph.width);
-			const y = Math.floor((1 - v) * glyph.height);
+			const x = Math.floor(px);
+			const y = Math.floor(py);
 			if (x < 0 || y < 0 || x >= glyph.width || y >= glyph.height) return false;
 			return glyph.mask[y * glyph.width + x] === 1;
 		}
-		// A fresh point on a letter, for a star that has drifted off.
-		function letterPoint() {
-			const inside = glyph.inside;
-			const pick = Math.floor(Math.random() * (inside.length / 2)) * 2;
-			return [(inside[pick] + Math.random()) / glyph.width, 1 - (inside[pick + 1] + Math.random()) / glyph.height];
+		// A random point of the icon's ink, edge or deep in their shares, in panel
+		// coordinates.
+		function iconPoint(shape) {
+			const list = shape.deep.length > 0 && Math.random() < shape.deepShare ? shape.deep : shape.edge;
+			const pick = Math.floor(Math.random() * (list.length / 2)) * 2;
+			return [(list[pick] + Math.random()) / shape.width, 1 - (list[pick + 1] + Math.random()) / shape.height];
 		}
 
-		// The stars: the word's points plus a scatter of background ones. Each has a home
+		// The stars: the icon's points plus a scatter of background ones. Each has a home
 		// in the panel, an offset and a velocity for the cursor to push, a fixed facet
 		// tilt, a colour pick, a twinkle phase and rate, and a size.
 		const starVao = gl.createVertexArray();
 		const starBuffers = [gl.createBuffer(), gl.createBuffer(), gl.createBuffer(), gl.createBuffer(), gl.createBuffer()];
 		let starCount = 0;
-		let wordStars = 0;
+		let iconStars = 0;
+		let lastSize = null;
 		let home = new Float32Array(0);
 		let position = new Float32Array(0);
 		let offset = new Float32Array(0);
@@ -377,12 +430,13 @@
 		let alpha = new Float32Array(0);
 		let fading = new Int8Array(0);
 		function makeStars(widthPx, heightPx) {
-			const wordCount = Math.round(Math.min(1800, Math.max(700, widthPx * 2.2)));
+			lastSize = [widthPx, heightPx];
+			const iconCount = Math.round(Math.min(5000, Math.max(2200, widthPx * 6.5)));
 			const scatterCount = Math.round(widthPx * heightPx / 480);
-			glyph = sampleWord(wordCount, widthPx / heightPx);
-			const wordPoints = glyph.points;
-			wordStars = wordPoints.length / 2;
-			starCount = wordStars + scatterCount;
+			glyph = sampleIcon(iconCount, widthPx / heightPx);
+			const iconPoints = glyph ? glyph.points : [];
+			iconStars = iconPoints.length / 2;
+			starCount = iconStars + scatterCount;
 			home = new Float32Array(starCount * 2);
 			position = new Float32Array(starCount * 2);
 			offset = new Float32Array(starCount * 2);
@@ -393,10 +447,10 @@
 			const seed = new Float32Array(starCount * 4);
 			const kind = new Float32Array(starCount);
 			for (let i = 0; i < starCount; i++) {
-				const inWord = i < wordStars;
-				home[i * 2] = inWord ? wordPoints[i * 2] : Math.random();
-				home[i * 2 + 1] = inWord ? wordPoints[i * 2 + 1] : Math.random();
-				kind[i] = inWord ? 1 : 0;
+				const onIconStar = i < iconStars;
+				home[i * 2] = onIconStar ? iconPoints[i * 2] : Math.random();
+				home[i * 2 + 1] = onIconStar ? iconPoints[i * 2 + 1] : Math.random();
+				kind[i] = onIconStar ? 1 : 0;
 				alpha[i] = 1;
 				fading[i] = 1;
 				const angle = Math.random() * Math.PI * 2;
@@ -422,13 +476,17 @@
 
 		// The cursor pushes stars the way Astra's does: an impulse along the pointer's
 		// motion for stars near the segment it just crossed, then the stars coast,
-		// and a spring brings each back to its home so the word mends itself.
+		// and a spring brings each back to its home so the icon mends itself.
 		const pointer = { x: -10, y: -10, px: -10, py: -10, inside: false };
-		// The resting drift: a slow current that turns over time. Word stars ride it
-		// along their letters and fade out where they leave one, to fade back in at a
-		// fresh point of the word; background stars swirl across the panel and wrap.
+		// The resting drift. Each icon star's home circles the icon's centre clockwise,
+		// the way the two koi swim, at S.circling radians a second scaled by S.flow, with
+		// a slow radial wander. A home that steps off the ink is moved up to three mask
+		// pixels inward or outward to the nearest ink, so stars on a thin line that runs
+		// round the centre slide along the line; a star whose home finds no ink within
+		// that reach fades out, to fade back in at a fresh point of the icon. Background stars swirl across the panel
+		// and wrap.
 		function driftHomes(dt, seconds) {
-			const speed = S.flow * dt;
+			const speed = Math.max(0, S.flow) * dt;
 			if (speed <= 0) return;
 			const t = seconds;
 			for (let i = 0; i < starCount; i++) {
@@ -437,18 +495,38 @@
 				const u = home[ix];
 				const v = home[iy];
 				const phase = seed4(i) * 6.2832;
-				if (i < wordStars) {
-					// Along the word, mostly, with a slow sideways wander.
-					const along = 0.018 + 0.012 * Math.sin(t * 0.37 + phase);
-					const across = 0.010 * Math.sin(t * 0.61 + u * 9.0 + phase);
-					home[ix] = u + along * speed;
-					home[iy] = v + across * speed;
-					const on = onLetter(home[ix], home[iy]);
+				if (i < iconStars) {
+					// In the mask's pixels, about the icon's centre, y down, where a
+					// growing angle turns clockwise on screen.
+					const dx = u * glyph.width - glyph.cx;
+					const dy = (1 - v) * glyph.height - glyph.cy;
+					const angle = S.circling * (1 + 0.5 * Math.sin(t * 0.37 + phase)) * speed;
+					const scale = 1 + 0.01 * Math.sin(t * 0.61 + phase) * speed;
+					const c = Math.cos(angle) * scale;
+					const s = Math.sin(angle) * scale;
+					let nx = glyph.cx + dx * c - dy * s;
+					let ny = glyph.cy + dx * s + dy * c;
+					let on = inkAt(nx, ny);
+					if (!on && fading[i] === 1) {
+						const r = Math.hypot(nx - glyph.cx, ny - glyph.cy) || 1;
+						const rx = (nx - glyph.cx) / r;
+						const ry = (ny - glyph.cy) / r;
+						for (const k of [1, -1, 2, -2, 3, -3]) {
+							if (inkAt(nx + rx * k, ny + ry * k)) {
+								nx += rx * k;
+								ny += ry * k;
+								on = true;
+								break;
+							}
+						}
+					}
+					home[ix] = nx / glyph.width;
+					home[iy] = 1 - ny / glyph.height;
 					if (fading[i] === 1 && !on) fading[i] = -1;
 					if (fading[i] === -1) {
 						alpha[i] = Math.max(0, alpha[i] - dt * 2.5);
 						if (alpha[i] === 0) {
-							const fresh = letterPoint();
+							const fresh = iconPoint(glyph);
 							home[ix] = fresh[0];
 							home[iy] = fresh[1];
 							offset[ix] = 0;
@@ -459,7 +537,7 @@
 						alpha[i] = Math.min(1, alpha[i] + dt * 1.2);
 					}
 				} else {
-					// A slow whirl across the panel.
+					// A slow swirl across the panel.
 					const cx = u - 0.5;
 					const cy = v - 0.5;
 					const swirl = 0.03 + 0.02 * Math.sin(t * 0.2 + phase);
