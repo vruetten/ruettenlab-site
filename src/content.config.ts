@@ -70,9 +70,6 @@ const news = defineCollection({
 			logo: z.string().optional(),
 			crop: z.enum(['center', 'left', 'right']).default('center'),
 			size: z.enum(['large', 'small']).default('large'),
-			lead: z.boolean().default(false),
-			pin: z.boolean().default(false),
-			rank: z.number().int().positive().optional(),
 			text: z.string().optional(),
 			line: z.string().optional(),
 		})
