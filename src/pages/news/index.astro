@@ -31,14 +31,8 @@ function widthsFor(image: ImageMetadata) {
 	return steps;
 }
 
+// Newest first, by date alone.
 const news = (await getCollection('news')).sort((a, b) => {
-	const byLead = Number(b.data.lead) - Number(a.data.lead);
-	if (byLead !== 0) return byLead;
-	const byPin = Number(b.data.pin) - Number(a.data.pin);
-	if (byPin !== 0) return byPin;
-	const rankA = a.data.rank ?? Number.POSITIVE_INFINITY;
-	const rankB = b.data.rank ?? Number.POSITIVE_INFINITY;
-	if (rankA !== rankB) return rankA - rankB;
 	const byDate = b.data.date.valueOf() - a.data.date.valueOf();
 	if (byDate !== 0) return byDate;
 	const label = (item: (typeof news)[number]) =>
