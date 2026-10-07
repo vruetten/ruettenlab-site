@@ -64,7 +64,7 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 					item.data.kind === 'press' && item.data.outlet
 						? `Featured by ${item.data.outlet}`
 						: '';
-				const alt = item.data.kind === 'lab' ? 'Nassau Hall at Princeton University' : '';
+				const alt = item.data.kind === 'lab' ? 'A red sandstone hall at Princeton University, seen through trees' : '';
 				return (
 				<li class:list={[{ small: item.data.size === 'small', upcoming: isUpcoming(item.data.date, item.data.datePrecision) }]}>
 					{item.data.url ? (
@@ -125,7 +125,13 @@ const lab = news.filter((item) => item.data.kind === 'lab' && !item.data.image);
 							<time datetime={item.data.date.toISOString().slice(0, 10)}>
 								{formatDate(item.data.date, item.data.datePrecision)}
 							</time>
-							<span>{item.data.text}</span>
+							{item.data.url ? (
+								<a href={item.data.url} target="_blank" rel="noopener noreferrer">
+									<span>{item.data.text}</span>
+								</a>
+							) : (
+								<span>{item.data.text}</span>
+							)}
 						</li>
 					))}
 				</ul>

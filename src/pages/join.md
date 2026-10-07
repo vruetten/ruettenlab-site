@@ -2,6 +2,7 @@
 layout: ../layouts/Base.astro
 showEmail: true
 showLinkedin: true
+backdrop: backdrops/princeton.jpg
 ---
 
 The lab opens in September 2027 and is hiring its first postdoctoral fellows and PhD students!
