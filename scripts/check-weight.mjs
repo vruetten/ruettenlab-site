@@ -30,7 +30,7 @@ function byteLength(text) {
 }
 
 async function fileBytes(urlPath) {
-	const relative = urlPath.replace(/^\/ruettenlab-site\/?/, '');
+	const relative = urlPath.replace(/^\//, '');
 	const full = path.join(root, relative);
 	try {
 		return byteLength(await readFile(full, 'utf8'));

@@ -4,7 +4,7 @@ The development site for the Princeton laboratory. The specification is `/Users/
 
 Astro 7.3.4, installed 2026-09-23. Content collections live in `src/content.config.ts` with the `glob` loader. The installed Astro skill names `src/content/` and `<ViewTransitions />`, which this project does not follow.
 
-`npm run dev` serves `http://127.0.0.1:4321/ruettenlab-site/`. `npm run build` runs `scripts/check-weight.mjs` and fails when a page is over 30 KB of JavaScript, 20 KB of CSS, 120 KB of fonts, or 400 KB total, or when a page other than a research thread ships any JavaScript.
+`npm run dev` serves `http://127.0.0.1:4321/`; the site is published at https://www.wholisticlab.org/. `npm run build` runs `scripts/check-weight.mjs` and fails when a page is over 30 KB of JavaScript, 20 KB of CSS, 120 KB of fonts, or 400 KB total, or when a page other than a research thread ships any JavaScript.
 
 ## Weight, measured 2026-09-23 from `npm run build`
 

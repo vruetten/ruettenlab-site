@@ -2,7 +2,7 @@
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-	site: 'https://vruetten.github.io',
-	base: '/ruettenlab-site',
+	site: 'https://www.wholisticlab.org',
+	base: '/',
 	output: 'static',
 });
