@@ -873,3 +873,24 @@ main h2 {
 }
 
 
+
+/* A page photo laid over the whole viewport at low opacity, under the page content. */
+.backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	background-position: center;
+	background-size: cover;
+	opacity: 0.16;
+	pointer-events: none;
+}
+
+.has-backdrop > main,
+.has-backdrop > footer {
+	position: relative;
+	z-index: 1;
+}
+
+.has-backdrop .contact-bar {
+	background: transparent;
+}

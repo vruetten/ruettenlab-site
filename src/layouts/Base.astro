@@ -8,13 +8,14 @@ interface Props {
 	showEmail?: boolean;
 	showAddress?: boolean;
 	showLinkedin?: boolean;
-	frontmatter?: { showEmail?: boolean; showAddress?: boolean; showLinkedin?: boolean };
+	frontmatter?: { showEmail?: boolean; showAddress?: boolean; showLinkedin?: boolean; backdrop?: string };
 }
 
 const { showEmail = false, showAddress = false, showLinkedin = false, frontmatter } = Astro.props;
 const emailUnderBody = showEmail || frontmatter?.showEmail === true;
 const addressUnderBody = showAddress || frontmatter?.showAddress === true;
 const linkedinUnderBody = showLinkedin || frontmatter?.showLinkedin === true;
+const backdrop = frontmatter?.backdrop;
 ---
 
 <html lang="en" data-direction="b" data-theme="dark">
@@ -92,7 +93,8 @@ const linkedinUnderBody = showLinkedin || frontmatter?.showLinkedin === true;
 		<title>{labName}</title>
 		<slot name="head" />
 	</head>
-	<body>
+	<body class:list={[{ 'has-backdrop': backdrop }]}>
+		{backdrop && <div class="backdrop" aria-hidden="true" style={`background-image: url('${siteHref(backdrop)}')`} />}
 		<header class="wrap">
 			<nav>
 					<ul>
