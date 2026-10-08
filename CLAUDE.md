@@ -37,6 +37,11 @@ correspondence, no prices, no personal contact details beyond what the site itse
 - Changing `base` or the domain breaks every link on the old address at once. Ship such a
   change in the same push as the Pages setting change, never ahead of it.
 
+## Journal
+
+`journal/` holds one append-only entry per working session (rules in `journal/README.md`).
+Add an entry at the end of a session that changed the site.
+
 ## Committing
 
 The shell has no git identity configured. Commit as the repository's author:
